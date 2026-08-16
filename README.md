@@ -23,4 +23,4 @@ An ESP32-based flight control system for a fixed-wing RC aircraft.
 
 ## Status
 
-🚧 In development of v1
+In development of v1
