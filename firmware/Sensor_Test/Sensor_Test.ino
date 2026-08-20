@@ -22,7 +22,7 @@ void setup() {
 
     Wire.begin(21, 22);
 
-    Serial.println("=== MPU REGISTER TEST ===");
+    Serial.println("=== SENSOR REGISTER TEST ===");
 
     Serial.print("WHO_AM_I: 0x");
     Serial.println(readRegister(0x75), HEX);

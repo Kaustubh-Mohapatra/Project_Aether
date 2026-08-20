@@ -93,9 +93,8 @@ void loop(){
     Wire.beginTransmission(0x68);
 
     if (Wire.endTransmission() != 0) {
-        Serial.println("IMU LOST!");
-        while (1){
-            delay (10);
+        Serial.println("IMU LOST!");        // Stops the running of code if MPU fails mid flight
+        // autopilotEnabled = false;
         }
     }
 
@@ -107,7 +106,7 @@ void loop(){
     Serial.print(a.acceleration.z);
     Serial.println(" m/s^2");
 
-    Serial.print("\nRotation X: ");
+    Serial.print("Rotation X: ");
     Serial.print(g.gyro.x);
     Serial.print(", Y: ");
     Serial.print(g.gyro.y);
@@ -115,9 +114,9 @@ void loop(){
     Serial.print(g.gyro.z);
     Serial.println(" rad/s");
 
-    Serial.print("\nTemperature: ");
+    Serial.print("Temperature: ");
     Serial.print(temp.temperature);
-    Serial.println(" degC");
+    Serial.println(" C");
 
     Serial.println(""); //gets me dem values printed every 0.5s
     delay(500);
