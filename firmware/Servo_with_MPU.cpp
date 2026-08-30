@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include <Wire.h>
 #include <ESP32Servo.h>
 #include <Adafruit_MPU6050.h>
@@ -5,6 +6,7 @@
 
 Adafruit_MPU6050 mpu;
 Servo rservo;
+Servo cservo;
 Servo lservo;
 
 void setup() {
@@ -12,13 +14,14 @@ void setup() {
   Wire.begin(21,22);
   rservo.attach(25);
   lservo.attach(33);
+  cservo.attach(32);
 
   if (!mpu.begin(0x68, &Wire)) {
         Serial.println("MPU initialization check failed");
         while (1){
           delay(10);
         }
-    } 
+    }
     else {
         Serial.println("MPU initialization successful");
     }
@@ -49,7 +52,8 @@ sensors_event_t a = {}; // gets me dem values
   int servoAngleR = 90 - roll;
   servoAngleR = constrain(servoAngleR, 20, 160);
 
-  lservo.write(servoAngleP);
-  rservo.write(servoAngleR);
+  lservo.write(0);
+  rservo.write(0);
+  cservo.write(0);
 
 }

@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include <Adafruit_MPU6050.h>   // Lib for MPU6050
 #include <Adafruit_Sensor.h>    // Lib for Sensors in general
 #include <Wire.h>               // Lib for I²C protocol
@@ -6,7 +7,7 @@ Adafruit_MPU6050 mpu;           // Initialize the device
 
 void setup(){
     Serial.begin(115200);
-    
+
     Wire.begin(21, 22);
 
     Serial.println("MPU6050 test");
@@ -16,7 +17,7 @@ void setup(){
         while (1){                                  // Stops the running of code if MPU doesnt get detected so we dont end up messing our other stuff up
             delay(10);
         }
-    } 
+    }
     else {
         Serial.println("MPU initialization successful");
     }
@@ -55,7 +56,7 @@ void setup(){
             break;
     }
 
-    mpu.setFilterBandwidth(MPU6050_BAND_5_HZ);  // Sets the filter bandwidth 
+    mpu.setFilterBandwidth(MPU6050_BAND_5_HZ);  // Sets the filter bandwidth
     Serial.print("Filter bandwidth set to: ");
     switch (mpu.getFilterBandwidth()) {
         case MPU6050_BAND_260_HZ:

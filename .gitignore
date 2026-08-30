@@ -1,0 +1,16 @@
+# PlatformIO generated files
+.pio/
+.cache/
+include/
+lib/
+test/
+compile_commands.json
+extra_script.py
+platformio.ini
+
+# Zed local settings/cache
+.zed/
+
+# OS junk
+.DS_Store
+Thumbs.db
