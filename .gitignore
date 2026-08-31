@@ -10,7 +10,3 @@ platformio.ini
 
 # Zed local settings/cache
 .zed/
-
-# OS junk
-.DS_Store
-Thumbs.db
