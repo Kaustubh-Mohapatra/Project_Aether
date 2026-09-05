@@ -4,6 +4,8 @@
 include/
 lib/
 test/
+src/
+// Will add src back when I start tests of v1, rn itll be filled with garbage test codes which my ocd wont allow
 compile_commands.json
 extra_script.py
 platformio.ini

@@ -49,5 +49,4 @@ void loop() {
     lservo.write(servoAngleR);    // Reversed
     cservo.write(servoAngleP);
 
-    
 }
