@@ -1,7 +1,7 @@
 #include <Arduino.h>
-#include <Adafruit_MPU6050.h>   // Lib for MPU6050
-#include <Adafruit_Sensor.h>    // Lib for Sensors in general
-#include <Wire.h>               // Lib for I²C protocol
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+#include <Wire.h>
 
 Adafruit_MPU6050 mpu;           // Initialize the device
 
@@ -10,16 +10,16 @@ void setup(){
 
     Wire.begin(21, 22);
 
-    Serial.println("MPU6050 test");
+    Serial.println("IMU test");
 
     if (!mpu.begin(0x68, &Wire)) {
-        Serial.println("MPU initialization check failed");
+        Serial.println("IMU initialization check failed");
         while (1){                                  // Stops the running of code if MPU doesnt get detected so we dont end up messing our other stuff up
             delay(10);
         }
     }
     else {
-        Serial.println("MPU initialization successful");
+        Serial.println("IMU initialization successful");
     }
 
     mpu.setAccelerometerRange(MPU6050_RANGE_8_G);   // Sets Accelerometer range of MPU

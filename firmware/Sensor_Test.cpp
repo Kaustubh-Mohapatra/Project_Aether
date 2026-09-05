@@ -1,47 +1,40 @@
 #include <Arduino.h>
 #include <Wire.h>
 
-#define MPU_ADDR 0x68
-
-uint8_t readRegister(uint8_t reg) {
-    Wire.beginTransmission(MPU_ADDR);
-    Wire.write(reg);
-    Wire.endTransmission(false);
-
-    Wire.requestFrom(MPU_ADDR, (uint8_t)1);
-
-    if (Wire.available()) {
-        return Wire.read();
-    }
-
-    return 0xFF;
-}
-
+// Generlized the Sensor scanner
 void setup() {
     Serial.begin(115200);
     delay(1000);
 
     Wire.begin(21, 22);
 
-    Serial.println("=== SENSOR REGISTER TEST ===");
+    Serial.println("=== I2C SCANNER ===");
 
-    Serial.print("WHO_AM_I: 0x");
-    Serial.println(readRegister(0x75), HEX);
+    int devices = 0;
 
-    Serial.print("PWR_MGMT_1: 0x");
-    Serial.println(readRegister(0x6B), HEX);
+    for (uint8_t address = 1; address < 127; address++) {
 
-    Serial.print("GYRO_CONFIG: 0x");
-    Serial.println(readRegister(0x1B), HEX);
+        Wire.beginTransmission(address);
+        uint8_t error = Wire.endTransmission();
 
-    Serial.print("ACCEL_CONFIG: 0x");
-    Serial.println(readRegister(0x1C), HEX);
+        if (error == 0) {
+            Serial.print("Device found at 0x");
+            if (address < 16) Serial.print("0");
+            Serial.println(address, HEX);
 
-    Serial.print("CONFIG: 0x");
-    Serial.println(readRegister(0x1A), HEX);
+            devices++;
+        }
+    }
 
-    Serial.print("SMPLRT_DIV: 0x");
-    Serial.println(readRegister(0x19), HEX);
+    Serial.println();
+
+    if (devices == 0) {
+        Serial.println("No I2C devices found.");
+    } else {
+        Serial.print("Found ");
+        Serial.print(devices);
+        Serial.println(" device(s).");
+    }
 }
 
 void loop() {}

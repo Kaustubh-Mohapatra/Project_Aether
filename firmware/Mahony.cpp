@@ -2,10 +2,12 @@
 #include <Wire.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
+#include <Adafruit_LIS3MDL.h>
 
 Adafruit_MPU6050 mpu;
 
 void ReadMPU();
+void ReadMag();
 
 // Vars
 
@@ -28,7 +30,7 @@ float integralFBz = 0.0f;
 // TIMING
 unsigned long lastTime = 0;
 
-// MPU
+// IMU
 float ax, ay, az;
 float gx, gy, gz;
 
@@ -200,9 +202,9 @@ void QuaternionToEuler(
     yaw   *= RAD_TO_DEG;
 }
 
+// IMU readings
 void ReadMPU()
 {
-    // Sensor readings
     sensors_event_t a = {};
     sensors_event_t g = {};
     sensors_event_t temp = {};
@@ -220,16 +222,16 @@ void setup()
     Serial.begin(115200);
     Wire.begin(21, 22);
 
-       Serial.println("MPU6050 test");
+       Serial.println("IMU test");
        if (!mpu.begin(0x68, &Wire))
        {
-            Serial.println("MPU initialization check failed");
+            Serial.println("IMU initialization check failed");
             while (1){
                 delay(10);
         }
     }
 
-    Serial.println("MPU initialization successful");
+    Serial.println("IMU initialization successful");
 
     // Configure MPU
     mpu.setGyroRange(MPU6050_RANGE_500_DEG);
@@ -275,6 +277,6 @@ void loop()
     Serial.print(pitch);
 
     Serial.print(" | Yaw Rate: ");
-    Serial.println(YawRate);    // cant get pure yaw for now but planning to buy a standalone magnetometer later to fuse for this
+    Serial.println(YawRate);
     delay(5);
 }
