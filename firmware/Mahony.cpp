@@ -40,9 +40,9 @@ void calibrateGyro()
 {
     const int samples = 2000;
 
-    float sumX = 0;
-    float sumY = 0;
-    float sumZ = 0;
+    float sumX = 0.0f;
+    float sumY = 0.0f;
+    float sumZ = 0.0f;
 
     Serial.println("Calibrating gyro...");
     Serial.println("Be still for a couble secs");
@@ -175,16 +175,12 @@ void QuaternionToEuler(
     );
 
     // Pitch
-    float sinp =
-        2.0f * (q0 * q2 - q3 * q1);
+    float sinp = 2.0f * (q0 * q2 - q3 * q1);
 
     // Prevent asin numerical errors
     if (fabsf(sinp) >= 1.0f)
     {
-        pitch = copysignf(
-            PI / 2.0f,
-            sinp
-        );
+        pitch = copysignf(PI / 2.0f, sinp);
     }
     else
     {
