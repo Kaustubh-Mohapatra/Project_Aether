@@ -2,9 +2,10 @@
 #include <Wire.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
-#include <Adafruit_LIS3MDL.h>
+#include <Adafruit_HMC5883_U.h>
 
 Adafruit_MPU6050 mpu;
+Adafruit_HMC5883_U mag(69);
 
 void ReadMPU();
 void ReadMag();
@@ -33,7 +34,7 @@ unsigned long lastTime = 0;
 // IMU
 float ax, ay, az;
 float gx, gy, gz;
-float mx, my, mz
+float mx, my, mz;
 
 // Bias correction
 float gyroBiasX = 0.0f;
@@ -95,25 +96,39 @@ void MahonyUpdate(
     float ax,
     float ay,
     float az,
+    float mx,
+    float my,
+    float mz,
     float dt
     )
 {
-    float norm;
+    float normi;
     float vx, vy, vz;
     float ex, ey, ez;
+    float wx, wy, wz;
 
     // Normalize accelerometer
-    norm = sqrtf(ax * ax + ay * ay + az * az);
+    normi = sqrtf(ax * ax + ay * ay + az * az); // for imu
+    normm = sqrtf(mx * mx + my * my + mz * mz); // for mag
 
     // Prevents division by 0
-    if (norm == 0.0f)
+    if (normi == 0.0f)
     {
         return;
     }
 
-    ax /= norm;
-    ay /= norm;
-    az /= norm;
+    ax /= normi;
+    ay /= normi;
+    az /= normi;
+
+    if (normm == 0.0f)
+    {
+        return;
+    }
+
+    mx /= normm;
+    my /= normm;
+    mz /= normm;
 
     // Estimated gravity direction from quaternion
     vx = 2.0f * (q1 * q3 - q0 * q2);
@@ -158,11 +173,11 @@ void MahonyUpdate(
     q3 += ( qa * gz + qb * gy - qc * gx);
 
     // Normalize quaternion
-    norm = invSqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
-    q0 *= norm;
-    q1 *= norm;
-    q2 *= norm;
-    q3 *= norm;
+    normi = invSqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
+    q0 *= normi;
+    q1 *= normi;
+    q2 *= normi;
+    q3 *= normi;
 }
 
 // QUATERNION → EULER ANGLES
@@ -221,7 +236,11 @@ void ReadMPU()
 // Magnetometer
 void ReadMag()
 {
-
+    sensors_event_t m;
+    mag.getEvent(&m);
+    mx = m.magnetic.x;
+    my = m.magnetic.y;
+    mz = m.magnetic.z;
 }
 
 void setup()
@@ -229,20 +248,29 @@ void setup()
     Serial.begin(115200);
     Wire.begin(21, 22);
 
-       Serial.println("IMU test");
-       if (!mpu.begin(0x68, &Wire))
-       {
-            Serial.println("IMU initialization check failed");
-            while (1){
-                delay(10);
+    if (!mag.begin(0x1C, &Wire)) {
+        Serial.println("Magnetometer initialization failed");
+        while (1) {
+            delay(10);
         }
     }
+    Serial.println("Magnetometer initialization successful");
 
+    Serial.println("IMU test");
+    if (!mpu.begin(0x68, &Wire))
+    {
+        Serial.println("IMU initialization check failed");
+        while (1){
+            delay(10);
+        }
+    }
     Serial.println("IMU initialization successful");
 
     // Configure MPU
     mpu.setGyroRange(MPU6050_RANGE_500_DEG);
     mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
+
+    // Configure Magnetometer
 
     delay(1000);
 
@@ -265,6 +293,7 @@ void loop()
     }
 
     ReadMPU();
+    ReadMag();
 
     // Run filter
     MahonyUpdate(gx, gy, gz, ax, ay, az, dt);
@@ -284,6 +313,15 @@ void loop()
     Serial.print(pitch);
 
     Serial.print(" | Yaw Rate: ");
-    Serial.println(YawRate);
+    Serial.print(YawRate);
+
+    Serial.print(" | Mag X: ");
+    Serial.print(mx);
+
+    Serial.print(" | Mag Y: ");
+    Serial.print(my);
+
+    Serial.print(" | Mag Z: ");
+    Serial.println(mz);
     delay(5);
 }

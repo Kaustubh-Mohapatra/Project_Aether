@@ -1,19 +1,19 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include <Adafruit_HMC5883_U.h>
 
 void setup() {
     Serial.begin(115200);
     Wire.begin(21, 22);
 
-    if (Wire.endTransmission() != 0) {
-        Serial.println("Magnetometer initialization check failed");
+    if (!mag.begin()) {
+        Serial.println("Magnetometer initialization failed");
         while (1) {
             delay(10);
         }
     }
-    else {
-        Serial.println("Magnetometer initialization successful");
-    }
+
+    Serial.println("Magnetometer initialization successful");
 
     // Configuration Register A
     Wire.beginTransmission(HMC_ADDR);
