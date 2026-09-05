@@ -15,6 +15,7 @@ float q1 = 0.0f;
 float q2 = 0.0f;
 float q3 = 0.0f;
 
+
 // Filter tuning [Haven't tuned it yet, will tune it later]
 float Kp = 2.0f;
 float Ki = 0.05f;
@@ -212,8 +213,6 @@ void ReadMPU()
     gx = g.gyro.x - gyroBiasX;
     gy = g.gyro.y - gyroBiasY;
     gz = g.gyro.z - gyroBiasZ;
-    float YawRate = gz * RAD_TO_DEG;
-
 }
 
 void setup()
@@ -265,6 +264,7 @@ void loop()
     float roll;
     float pitch;
     float yaw;
+    float YawRate = gz * RAD_TO_DEG;
 
     QuaternionToEuler(roll, pitch, yaw);
 
@@ -274,7 +274,7 @@ void loop()
     Serial.print(" | Pitch: ");
     Serial.print(pitch);
 
-    Serial.print(" | Yaw Rate: ");      // cant get pure yaw for now but planning to buy a standalone magnetometer later to fuse for this
-    Serial.println(YawRate);
+    Serial.print(" | Yaw Rate: ");
+    Serial.println(YawRate);    // cant get pure yaw for now but planning to buy a standalone magnetometer later to fuse for this
     delay(5);
 }
