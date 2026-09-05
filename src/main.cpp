@@ -18,7 +18,7 @@ void ReadMPU()
     sensors_event_t a = {};
     sensors_event_t g = {};
     sensors_event_t temp = {};
-    mpu.getEvent(&a, &g);
+    mpu.getEvent(&a, &g, &temp);
     ax = a.acceleration.x;
     ay = a.acceleration.y;
     az = a.acceleration.z;
