@@ -1,15 +1,13 @@
 #include <Arduino.h>
 #include <Wire.h>
-#include <ESP32Servo.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
 
 Adafruit_MPU6050 mpu;
 
-mpu.setGyroRange(MPU6050_RANGE_500_DEG);
-mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
+void ReadMPU();
 
-// MAHONY FILTER
+// Vars
 
 // Quaternion representing orientation
 float q0 = 1.0f;
@@ -29,9 +27,54 @@ float integralFBz = 0.0f;
 // TIMING
 unsigned long lastTime = 0;
 
-// MPU PLACEHOLDER VARIABLES
+// MPU
 float ax, ay, az;
 float gx, gy, gz;
+
+// Bias correction
+float gyroBiasX = 0.0f;
+float gyroBiasY = 0.0f;
+float gyroBiasZ = 0.0f;
+
+void calibrateGyro()
+{
+    const int samples = 2000;
+
+    float sumX = 0;
+    float sumY = 0;
+    float sumZ = 0;
+
+    Serial.println("Calibrating gyro...");
+    Serial.println("Be still for a couble secs");
+
+    delay(2000);
+
+    for (int i = 0; i < samples; i++)
+    {
+        ReadMPU();
+        sumX += gx;
+        sumY += gy;
+        sumZ += gz;
+        delay(2);
+    }
+
+    gyroBiasX = sumX / samples;
+    gyroBiasY = sumY / samples;
+    gyroBiasZ = sumZ / samples;
+
+    Serial.println("Calibration complete");
+
+    Serial.print("GX bias: ");
+    Serial.println(gyroBiasX, 6);
+
+    Serial.print("GY bias: ");
+    Serial.println(gyroBiasY, 6);
+
+    Serial.print("GZ bias: ");
+    Serial.println(gyroBiasZ, 6);
+}
+
+// MAHONY FILTER
 
 // INV SQRT
 float invSqrt(float x)
@@ -170,29 +213,38 @@ void ReadMPU()
     ax = a.acceleration.x;
     ay = a.acceleration.y;
     az = a.acceleration.z;
-    gx = g.gyro.x;
-    gy = g.gyro.y;
-    gz = g.gyro.z;
+    gx = g.gyro.x - gyroBiasX;
+    gy = g.gyro.y - gyroBiasY;
+    gz = g.gyro.z - gyroBiasZ;
 }
 
 void setup()
 {
     Serial.begin(115200);
     Wire.begin(21, 22);
-    lastTime = micros();
-    Serial.println("MPU6050 test");
 
-    if (!mpu.begin(0x68, &Wire)) {
-        Serial.println("MPU initialization check failed");
-        while (1){                                  // Stops the running of code if MPU doesnt get detected so we dont end up messing our other stuff up
-            delay(10);
+       Serial.println("MPU6050 test");
+       if (!mpu.begin(0x68, &Wire))
+       {
+            Serial.println("MPU initialization check failed");
+            while (1){
+                delay(10);
         }
     }
-    else {
-        Serial.println("MPU initialization successful");
-    }
-    delay(10);
 
+    Serial.println("MPU initialization successful");
+
+    // Configure MPU
+    mpu.setGyroRange(MPU6050_RANGE_500_DEG);
+    mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
+
+    delay(1000);
+
+    // Aircraft MUST be stationary here
+    calibrateGyro();
+
+    // Start timing AFTER calibration
+    lastTime = micros();
     Serial.println("Mahony Quaternion Filter Started");
 }
 
