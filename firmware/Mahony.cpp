@@ -212,6 +212,8 @@ void ReadMPU()
     gx = g.gyro.x - gyroBiasX;
     gy = g.gyro.y - gyroBiasY;
     gz = g.gyro.z - gyroBiasZ;
+    float YawRate = gz * RAD_TO_DEG;
+
 }
 
 void setup()
@@ -272,7 +274,7 @@ void loop()
     Serial.print(" | Pitch: ");
     Serial.print(pitch);
 
-    Serial.print(" | Yaw: ");
-    Serial.println(yaw);
+    Serial.print(" | Yaw Rate: ");      // cant get pure yaw for now but planning to buy a standalone magnetometer later to fuse for this
+    Serial.println(YawRate);
     delay(5);
 }
