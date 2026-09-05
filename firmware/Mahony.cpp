@@ -33,6 +33,7 @@ unsigned long lastTime = 0;
 // IMU
 float ax, ay, az;
 float gx, gy, gz;
+float mx, my, mz
 
 // Bias correction
 float gyroBiasX = 0.0f;
@@ -215,6 +216,12 @@ void ReadMPU()
     gx = g.gyro.x - gyroBiasX;
     gy = g.gyro.y - gyroBiasY;
     gz = g.gyro.z - gyroBiasZ;
+}
+
+// Magnetometer
+void ReadMag()
+{
+
 }
 
 void setup()
