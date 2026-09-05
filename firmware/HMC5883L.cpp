@@ -2,70 +2,38 @@
 #include <Wire.h>
 #include <Adafruit_HMC5883_U.h>
 
+Adafruit_HMC5883_U mag(1);
+
 void setup() {
     Serial.begin(115200);
     Wire.begin(21, 22);
 
-    if (!mag.begin()) {
+    if (!mag.begin(0x1E, &Wire)) {
         Serial.println("Magnetometer initialization failed");
         while (1) {
             delay(10);
         }
     }
-
-    Serial.println("Magnetometer initialization successful");
-
-    // Configuration Register A
-    Wire.beginTransmission(HMC_ADDR);
-    Wire.write(0x00);
-    Wire.write(0x70);       // 8-average, 15 Hz, normal measurement
-    Wire.endTransmission();
-
-    // Configuration Register B
-    Wire.beginTransmission(HMC_ADDR);
-    Wire.write(0x01);
-    Wire.write(0x20);       // Gain setting
-    Wire.endTransmission();
-
-    // Mode Register
-    Wire.beginTransmission(HMC_ADDR);
-    Wire.write(0x02);
-    Wire.write(0x00);       // Continuous measurement mode
-    Wire.endTransmission();
-
-    Serial.println("HMC5883L configured");
-    Serial.println("");
-    delay(100);
+    else{
+        Serial.println("Magnetometer initialization successful");
+    }
 }
 
 void loop() {
+    sensors_event_t m;
+    mag.getEvent(&m);
+    mx = m.magnetic.x;
+    my = m.magnetic.y;
+    mz = m.magnetic.z;
 
-    // HMC data registers:
-    // X = 0x03, Y = 0x07, Z = 0x05
-    Wire.beginTransmission(HMC_ADDR);
-    Wire.write(0x03);
-    Wire.endTransmission(false);
+    Serial.print("Mag X: ");
+    Serial.print(mx);
 
-    Wire.requestFrom(HMC_ADDR, (uint8_t)6);
+    Serial.print(" | Mag Y: ");
+    Serial.print(my);
 
-    if (Wire.available() == 6) {
-
-        int16_t x = (Wire.read() << 8) | Wire.read();
-        int16_t z = (Wire.read() << 8) | Wire.read();
-        int16_t y = (Wire.read() << 8) | Wire.read();
-
-        Serial.print("Mag X: ");
-        Serial.print(x);
-
-        Serial.print(", Y: ");
-        Serial.print(y);
-
-        Serial.print(", Z: ");
-        Serial.println(z);
-    }
-    else {
-        Serial.println("MAGNETOMETER READ FAILED!");
-    }
+    Serial.print(" | Mag Z: ");
+    Serial.println(mz);
 
     delay(500);
 }

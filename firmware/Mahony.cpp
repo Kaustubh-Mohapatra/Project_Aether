@@ -36,10 +36,23 @@ float ax, ay, az;
 float gx, gy, gz;
 float mx, my, mz;
 
-// Bias correction
+// IMU Bias correction
 float gyroBiasX = 0.0f;
 float gyroBiasY = 0.0f;
 float gyroBiasZ = 0.0f;
+
+// Mag Calibration
+float magMinX = 0.0f;
+float magMinY = 0.0f;
+float magMinZ = 0.0f;
+
+float magMaxX = 0.0f;
+float magMaxY = 0.0f;
+float magMaxZ = 0.0f;
+
+float magBiasX = 0.0f;
+float magBiasY = 0.0f;
+float magBiasZ = 0.0f;
 
 void calibrateGyro()
 {
@@ -79,6 +92,54 @@ void calibrateGyro()
     Serial.println(gyroBiasZ, 6);
 }
 
+void calibrateMag()
+{
+    float minX =  9999.0f;
+    float minY =  9999.0f;
+    float minZ =  9999.0f;
+
+    float maxX = -9999.0f;
+    float maxY = -9999.0f;
+    float maxZ = -9999.0f;
+
+    Serial.println("Magnetometer calibration...");
+    Serial.println("Rotate the sensor slowly through ALL orientations.");
+
+    delay(2000);
+
+    unsigned long startTime = millis();
+
+    while (millis() - startTime < 15000)
+    {
+        ReadMag();
+
+        minX = min(minX, mx);
+        minY = min(minY, my);
+        minZ = min(minZ, mz);
+
+        maxX = max(maxX, mx);
+        maxY = max(maxY, my);
+        maxZ = max(maxZ, mz);
+
+        delay(10);
+    }
+
+    magBiasX = (maxX + minX) * 0.5f;
+    magBiasY = (maxY + minY) * 0.5f;
+    magBiasZ = (maxZ + minZ) * 0.5f;
+
+    Serial.println("Mag calibration complete");
+
+    Serial.print("Mag X bias: ");
+    Serial.println(magBiasX);
+
+    Serial.print("Mag Y bias: ");
+    Serial.println(magBiasY);
+
+    Serial.print("Mag Z bias: ");
+    Serial.println(magBiasZ);
+}
+
 // MAHONY FILTER
 
 // INV SQRT
@@ -103,8 +164,11 @@ void MahonyUpdate(
     )
 {
     float normi;
+    float normm;
     float vx, vy, vz;
     float ex, ey, ez;
+    float hx, hy;
+    float bx, bz;
     float wx, wy, wz;
 
     // Normalize accelerometer
@@ -135,10 +199,49 @@ void MahonyUpdate(
     vy = 2.0f * (q0 * q1 + q2 * q3);
     vz = q0 * q0 - q1 * q1 - q2 * q2 + q3 * q3;
 
-    // Error between measured and estimated gravity
-    ex = (ay * vz - az * vy);
-    ey = (az * vx - ax * vz);
-    ez = (ax * vy - ay * vx);
+
+    // Estimated magnetic field direction
+    hx =
+        2.0f * mx * (0.5f - q2*q2 - q3*q3) +
+        2.0f * my * (q1*q2 - q0*q3) +
+        2.0f * mz * (q1*q3 + q0*q2);
+
+    hy =
+        2.0f * mx * (q1*q2 + q0*q3) +
+        2.0f * my * (0.5f - q1*q1 - q3*q3) +
+        2.0f * mz * (q2*q3 - q0*q1);
+
+    bx = sqrtf(hx*hx + hy*hy);
+
+    bz =
+        2.0f * mx * (q1*q3 - q0*q2) +
+        2.0f * my * (q2*q3 + q0*q1) +
+        2.0f * mz * (0.5f - q1*q1 - q2*q2);
+
+
+    // Estimated magnetic field from quaternion
+    wx =
+        2.0f * bx * (0.5f - q2*q2 - q3*q3) +
+        2.0f * bz * (q1*q3 - q0*q2);
+
+    wy =
+        2.0f * bx * (q1*q2 - q0*q3) +
+        2.0f * bz * (q0*q1 + q2*q3);
+
+    wz =
+        2.0f * bx * (q0*q2 + q1*q3) +
+        2.0f * bz * (0.5f - q1*q1 - q2*q2);
+
+
+    // Net error
+    ex = (ay * vz - az * vy)
+       + (my * wz - mz * wy);
+
+    ey = (az * vx - ax * vz)
+       + (mz * wx - mx * wz);
+
+    ez = (ax * vy - ay * vx)
+       + (mx * wy - my * wx);
 
     // Integral feedback [In an if so i can turn it off if Ki = 0]
     if (Ki > 0.0f){
@@ -233,14 +336,14 @@ void ReadMPU()
     gz = g.gyro.z - gyroBiasZ;
 }
 
-// Magnetometer
+// Magnetometer readings
 void ReadMag()
 {
     sensors_event_t m;
     mag.getEvent(&m);
-    mx = m.magnetic.x;
-    my = m.magnetic.y;
-    mz = m.magnetic.z;
+    mx = m.magnetic.x - magBiasX;
+    my = m.magnetic.y - magBiasY;
+    mz = m.magnetic.z - magBiasZ;
 }
 
 void setup()
@@ -248,13 +351,15 @@ void setup()
     Serial.begin(115200);
     Wire.begin(21, 22);
 
-    if (!mag.begin(0x1C, &Wire)) {
+    if (!mag.begin()) {
         Serial.println("Magnetometer initialization failed");
         while (1) {
             delay(10);
         }
     }
-    Serial.println("Magnetometer initialization successful");
+    else{
+        Serial.println("Magnetometer initialization successful");
+    }
 
     Serial.println("IMU test");
     if (!mpu.begin(0x68, &Wire))
@@ -270,12 +375,11 @@ void setup()
     mpu.setGyroRange(MPU6050_RANGE_500_DEG);
     mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
 
-    // Configure Magnetometer
-
-    delay(1000);
-
     // WE MUST be stationary here
     calibrateGyro();
+
+    // Gotta rotate now
+    calibrateMag();
 
     // Start timing AFTER calibration
     lastTime = micros();
@@ -287,8 +391,8 @@ void loop()
     // Calculate delta time
     unsigned long currentTime = micros();
     float dt = (currentTime - lastTime) / 1000000.0f;
+    lastTime = currentTime;
     if (dt <= 0.0f || dt > 0.1f) {                      // Filter bad dt
-        lastTime = currentTime;
         return;
     }
 
@@ -296,7 +400,7 @@ void loop()
     ReadMag();
 
     // Run filter
-    MahonyUpdate(gx, gy, gz, ax, ay, az, dt);
+    MahonyUpdate(gx, gy, gz, ax, ay, az, mx, my, mz, dt);
 
     // Get Euler angles
     float roll;
