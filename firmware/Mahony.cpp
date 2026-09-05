@@ -134,9 +134,9 @@ void MahonyUpdate(
 
     // Proportional feedback
     if (Kp > 0.0f){
-    gx += Kp * ex;
-    gy += Kp * ey;
-    gz += Kp * ez;
+        gx += Kp * ex;
+        gy += Kp * ey;
+        gz += Kp * ez;
     }
 
     // Quaternion derivative
