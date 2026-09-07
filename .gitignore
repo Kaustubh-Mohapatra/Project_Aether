@@ -2,7 +2,6 @@
 .pio/
 .cache/
 include/
-lib/
 test/
 src/
 compile_commands.json
