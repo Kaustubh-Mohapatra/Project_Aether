@@ -2,7 +2,7 @@
 #include <Wire.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
-#include <QMC5883P.h>
+#include "QMC5883P.h"
 
 Adafruit_MPU6050 mpu;
 QMC5883P mag(1);
@@ -42,14 +42,6 @@ float gyroBiasY = 0.0f;
 float gyroBiasZ = 0.0f;
 
 // Mag Calibration
-float magMinX = 0.0f;
-float magMinY = 0.0f;
-float magMinZ = 0.0f;
-
-float magMaxX = 0.0f;
-float magMaxY = 0.0f;
-float magMaxZ = 0.0f;
-
 float magBiasX = 0.0f;
 float magBiasY = 0.0f;
 float magBiasZ = 0.0f;
@@ -163,6 +155,15 @@ void MahonyUpdate(
     float dt
     )
 {
+    Serial.print("Q: ");
+    Serial.print(q0, 6);
+    Serial.print(", ");
+    Serial.print(q1, 6);
+    Serial.print(", ");
+    Serial.print(q2, 6);
+    Serial.print(", ");
+    Serial.println(q3, 6);
+
     float normi;
     float normm;
     float vx, vy, vz;
@@ -350,12 +351,14 @@ void setup()
 {
     Serial.begin(115200);
     Wire.begin(21, 22);
+    Wire.setClock(100000);
+    Wire.setTimeOut(50);
 
     if (!mag.begin()) {
         Serial.println("Magnetometer initialization failed");
         while (1) {
             delay(10);
-        }
+          }
     }
     else{
         Serial.println("Magnetometer initialization successful");
@@ -406,26 +409,25 @@ void loop()
     float roll;
     float pitch;
     float yaw;
+    float PitchRate = gx * RAD_TO_DEG;
+    float RollRate = gy * RAD_TO_DEG;
     float YawRate = gz * RAD_TO_DEG;
 
     QuaternionToEuler(roll, pitch, yaw);
 
-    Serial.print("Roll: ");
-    Serial.print(roll);
-
-    Serial.print(" | Pitch: ");
+    Serial.print("Pitch: ");
     Serial.print(pitch);
+    Serial.print(" | Pitch Rate: ");
+    Serial.print(PitchRate);
 
+    Serial.print(" | Roll: ");
+    Serial.print(roll);
+    Serial.print(" | Roll Rate: ");
+    Serial.print(RollRate);
+
+    Serial.print(" | Yaw: ");
+    Serial.print(yaw);
     Serial.print(" | Yaw Rate: ");
-    Serial.print(YawRate);
-
-    Serial.print(" | Mag X: ");
-    Serial.print(mx);
-
-    Serial.print(" | Mag Y: ");
-    Serial.print(my);
-
-    Serial.print(" | Mag Z: ");
-    Serial.println(mz);
+    Serial.println(YawRate);
     delay(5);
 }
