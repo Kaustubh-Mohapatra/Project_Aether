@@ -417,17 +417,17 @@ void loop()
 
     Serial.print("Pitch: ");
     Serial.print(pitch);
-    Serial.print(" | Pitch Rate: ");
-    Serial.print(PitchRate);
+    //Serial.print(" | Pitch Rate: ");
+    //Serial.print(PitchRate);
 
     Serial.print(" | Roll: ");
     Serial.print(roll);
-    Serial.print(" | Roll Rate: ");
-    Serial.print(RollRate);
+    //Serial.print(" | Roll Rate: ");
+    //Serial.print(RollRate);
 
     Serial.print(" | Yaw: ");
-    Serial.print(yaw);
-    Serial.print(" | Yaw Rate: ");
-    Serial.println(YawRate);
+    Serial.println(yaw);
+    //Serial.print(" | Yaw Rate: ");
+    //Serial.println(YawRate);
     delay(5);
 }

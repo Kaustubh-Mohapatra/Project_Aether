@@ -2,6 +2,7 @@
 
 #define QMC5883P_ADDR_PRIMARY 0x2C
 #define QMC5883P_ADDR_SECONDARY 0x1C
+#define QMC5883P_ADDR_TERTIARY 0x0C
 
 #define QMC5883P_CHIP_ID_REG 0x00
 #define QMC5883P_CHIP_ID     0x80
@@ -49,6 +50,8 @@ bool QMC5883P::begin(TwoWire *wire)
     else if (testAddress(QMC5883P_ADDR_SECONDARY)) {
         _address = QMC5883P_ADDR_SECONDARY;
     }
+    else if (testAddress(QMC5883P_ADDR_TERTIARY)) {
+        _address = QMC5883P_ADDR_TERTIARY;
     else {
         return false;
     }
