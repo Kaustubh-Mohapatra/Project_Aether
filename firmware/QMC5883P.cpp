@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <Wire.h>
-#include <QMC5883L.h>
+#include <QMC5883P.h>
 
 Adafruit_HMC5883_U mag(1);
 

@@ -16,7 +16,7 @@ An ESP32-based flight control system for a fixed-wing RC aircraft.
 
 - ESP32
 - MPU6050
-- QMC5883
+- QMC5883P
 - FS IA6B RX + FS i6 TX
 - Servos
 - BLDC motor + ESC
