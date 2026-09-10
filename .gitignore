@@ -3,7 +3,6 @@
 .cache/
 include/
 test/
-src/
 compile_commands.json
 extra_script.py
 platformio.ini

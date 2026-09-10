@@ -2,7 +2,7 @@
 #include <Wire.h>
 #include <QMC5883P.h>
 
-Adafruit_HMC5883_U mag(1);
+Adafruit_QMC5883P mag(1);
 
 void setup() {
     Serial.begin(115200);
