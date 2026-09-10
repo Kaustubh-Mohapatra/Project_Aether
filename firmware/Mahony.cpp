@@ -2,10 +2,10 @@
 #include <Wire.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
-#include <QMC5883L.h>
+#include <QMC5883P.h>
 
 Adafruit_MPU6050 mpu;
-QMC5883L mag(1);
+QMC5883P mag(1);
 
 void ReadMPU();
 void ReadMag();
