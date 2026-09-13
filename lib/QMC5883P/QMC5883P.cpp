@@ -15,14 +15,20 @@
 #define QMC5883P_MODE_CONTINUOUS 0x03
 
 #define QMC5883P_ODR_100HZ       (0x02 << 2)
-#define QMC5883P_RANGE_8G        (0x01 << 4)
-#define QMC5883P_OSR1_8          (0x00 << 6)
-#define QMC5883P_OSR2_1          0x01
+#define QMC5883P_RANGE_8G        (0x01 << 2)
+#define QMC5883P_OSR1_8          (0x00 << 4)
+#define QMC5883P_OSR2_1          (0x00 << 6)
+
+#define QMC5883P_SETRESET_ON     0x00
 
 #define QMC5883P_CTRL1_VALUE \
-    (QMC5883P_OSR1_8 | QMC5883P_RANGE_8G | QMC5883P_ODR_100HZ | QMC5883P_MODE_CONTINUOUS)
+    (QMC5883P_OSR2_1 | \
+     QMC5883P_OSR1_8 | \
+     QMC5883P_ODR_100HZ | \
+     QMC5883P_MODE_CONTINUOUS)
+
 #define QMC5883P_CTRL2_VALUE \
-    QMC5883P_OSR2_1
+    (QMC5883P_RANGE_8G | QMC5883P_SETRESET_ON)
 
 QMC5883P::QMC5883P(int32_t sensorID)
 {
@@ -52,6 +58,7 @@ bool QMC5883P::begin(TwoWire *wire)
     }
     else if (testAddress(QMC5883P_ADDR_TERTIARY)) {
         _address = QMC5883P_ADDR_TERTIARY;
+    }
     else {
         return false;
     }

@@ -3,12 +3,17 @@
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
 #include "QMC5883P.h"
+#include <SD.h>
+
+// This is the biggest fish to fry, aka everything (almost) implemented together into 1 thing
+// Still left to integrate: Servo, RXTX, ESC (Probably I wont allow esp to control the bldc but we'll see)
 
 Adafruit_MPU6050 mpu;
 QMC5883P mag(1);
+File logFile;
 
 void ReadMPU();
-void ReadMag();
+bool ReadMag();
 
 // Vars
 
@@ -103,15 +108,16 @@ void calibrateMag()
 
     while (millis() - startTime < 15000)
     {
-        ReadMag();
+        if (ReadMag())
+        {
+            minX = min(minX, mx);
+            minY = min(minY, my);
+            minZ = min(minZ, mz);
 
-        minX = min(minX, mx);
-        minY = min(minY, my);
-        minZ = min(minZ, mz);
-
-        maxX = max(maxX, mx);
-        maxY = max(maxY, my);
-        maxZ = max(maxZ, mz);
+            maxX = max(maxX, mx);
+            maxY = max(maxY, my);
+            maxZ = max(maxZ, mz);
+        }
 
         delay(10);
     }
@@ -155,15 +161,6 @@ void MahonyUpdate(
     float dt
     )
 {
-    Serial.print("Q: ");
-    Serial.print(q0, 6);
-    Serial.print(", ");
-    Serial.print(q1, 6);
-    Serial.print(", ");
-    Serial.print(q2, 6);
-    Serial.print(", ");
-    Serial.println(q3, 6);
-
     float normi;
     float normm;
     float vx, vy, vz;
@@ -202,36 +199,61 @@ void MahonyUpdate(
 
 
     // Estimated magnetic field direction
-    hx =
-        2.0f * mx * (0.5f - q2*q2 - q3*q3) +
-        2.0f * my * (q1*q2 - q0*q3) +
-        2.0f * mz * (q1*q3 + q0*q2);
+    // Estimated magnetic field direction
+    hx = 2.0f * mx * (
+        0.5f - q2 * q2 - q3 * q3
+    )
+    + 2.0f * my * (
+        q1 * q2 - q0 * q3
+    )
+    + 2.0f * mz * (
+        q1 * q3 + q0 * q2
+    );
 
-    hy =
-        2.0f * mx * (q1*q2 + q0*q3) +
-        2.0f * my * (0.5f - q1*q1 - q3*q3) +
-        2.0f * mz * (q2*q3 - q0*q1);
+    hy = 2.0f * mx * (
+        q1 * q2 + q0 * q3
+    )
+    + 2.0f * my * (
+        0.5f - q1 * q1 - q3 * q3
+    )
+    + 2.0f * mz * (
+        q2 * q3 - q0 * q1
+    );
 
-    bx = sqrtf(hx*hx + hy*hy);
+    bx = sqrtf(hx * hx + hy * hy);
 
-    bz =
-        2.0f * mx * (q1*q3 - q0*q2) +
-        2.0f * my * (q2*q3 + q0*q1) +
-        2.0f * mz * (0.5f - q1*q1 - q2*q2);
+    bz = 2.0f * mx * (
+        q1 * q3 - q0 * q2
+    )
+    + 2.0f * my * (
+        q2 * q3 + q0 * q1
+    )
+    + 2.0f * mz * (
+        0.5f - q1 * q1 - q2 * q2
+    );
 
 
     // Estimated magnetic field from quaternion
-    wx =
-        2.0f * bx * (0.5f - q2*q2 - q3*q3) +
-        2.0f * bz * (q1*q3 - q0*q2);
+    wx = 2.0f * bx * (
+        0.5f - q2 * q2 - q3 * q3
+    )
+    + 2.0f * bz * (
+        q1 * q3 - q0 * q2
+    );
 
-    wy =
-        2.0f * bx * (q1*q2 - q0*q3) +
-        2.0f * bz * (q0*q1 + q2*q3);
+    wy = 2.0f * bx * (
+        q1 * q2 - q0 * q3
+    )
+    + 2.0f * bz * (
+        q0 * q1 + q2 * q3
+    );
 
-    wz =
-        2.0f * bx * (q0*q2 + q1*q3) +
-        2.0f * bz * (0.5f - q1*q1 - q2*q2);
+    wz = 2.0f * bx * (
+        q0 * q2 + q1 * q3
+    )
+    + 2.0f * bz * (
+        0.5f - q1 * q1 - q2 * q2
+    );
 
 
     // Net error
@@ -338,13 +360,20 @@ void ReadMPU()
 }
 
 // Magnetometer readings
-void ReadMag()
+bool ReadMag()
 {
-    sensors_event_t m;
-    mag.getEvent(&m);
+    sensors_event_t m = {};
+
+    if (!mag.getEvent(&m))
+    {
+        return false;
+    }
+
     mx = m.magnetic.x - magBiasX;
     my = m.magnetic.y - magBiasY;
     mz = m.magnetic.z - magBiasZ;
+
+    return true;
 }
 
 void setup()
@@ -383,6 +412,42 @@ void setup()
     // Gotta rotate now
     calibrateMag();
 
+    //Writing onto SD
+    SPI.begin(18, 19, 23, 5);
+
+    if (!SD.begin(5, SPI, 1000000))
+    {
+        Serial.println("SD initialization failed!");
+        while(1){
+            delay(10);
+        }
+    }
+    else
+    {
+        Serial.println("SD initialized!");
+
+        logFile = SD.open("/flight.csv", FILE_WRITE);
+
+        if (!logFile)
+        {
+            Serial.println("Failed to open flight.csv!");
+        }
+        else
+        {
+            logFile.println(
+                "time,"
+                "ax,ay,az,"
+                "gx,gy,gz,"
+                "mx,my,mz,"
+                "pitch,roll,yaw"
+            );
+
+            logFile.flush();
+
+            Serial.println("Logging started.");
+        }
+    }
+
     // Start timing AFTER calibration
     lastTime = micros();
     Serial.println("Mahony Quaternion Filter Started");
@@ -393,16 +458,28 @@ void loop()
     // Calculate delta time
     unsigned long currentTime = micros();
     float dt = (currentTime - lastTime) / 1000000.0f;
-    lastTime = currentTime;
-    if (dt <= 0.0f || dt > 0.1f) {                      // Filter bad dt
+
+    if (dt <= 0.0f || dt > 0.1f)
+    {
+        lastTime = currentTime;     // filter bad dt
         return;
     }
 
+    lastTime = currentTime;
+
     ReadMPU();
-    ReadMag();
+    bool magOK = ReadMag();
+
+    if (!magOK)
+    {
+        Serial.println("MAG READ FAILED");
+    }
 
     // Run filter
-    MahonyUpdate(gx, gy, gz, ax, ay, az, mx, my, mz, dt);
+    if (magOK)
+    {
+        MahonyUpdate(gx, gy, gz, ax, ay, az, mx, my, mz, dt);
+    }
 
     // Get Euler angles
     float roll;
@@ -413,6 +490,48 @@ void loop()
     float YawRate = gz * RAD_TO_DEG;
 
     QuaternionToEuler(roll, pitch, yaw);
+
+    static uint32_t lastLog = 0;
+
+    if (millis() - lastLog >= 10)
+    {
+        lastLog = millis();
+
+        if (logFile)
+        {
+            char line[256];
+
+            snprintf(
+                line,
+                sizeof(line),
+                "%lu,"
+                "%.4f,%.4f,%.4f,"
+                "%.4f,%.4f,%.4f,"
+                "%.4f,%.4f,%.4f,"
+                "%.4f,%.4f,%.4f,"
+                "%.4f,%.4f,%.4f",
+
+                millis(),
+
+                ax, ay, az,
+                gx, gy, gz,
+                mx, my, mz,
+                pitch, roll, yaw
+            );
+
+            logFile.println(line);
+            }
+    }
+
+    static uint32_t lastFlush = 0;
+
+    if (millis() - lastFlush >= 1000)
+    {
+        lastFlush = millis();
+
+        if (logFile)
+            logFile.flush();
+    }
 
     Serial.print("Pitch: ");
     Serial.print(pitch);
