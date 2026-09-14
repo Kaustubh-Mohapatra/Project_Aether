@@ -200,60 +200,30 @@ void MahonyUpdate(
 
     // Estimated magnetic field direction
     // Estimated magnetic field direction
-    hx = 2.0f * mx * (
-        0.5f - q2 * q2 - q3 * q3
-    )
-    + 2.0f * my * (
-        q1 * q2 - q0 * q3
-    )
-    + 2.0f * mz * (
-        q1 * q3 + q0 * q2
-    );
+    hx = 2.0f * mx * (0.5f - q2 * q2 - q3 * q3)
+       + 2.0f * my * (q1 * q2 - q0 * q3)
+       + 2.0f * mz * (q1 * q3 + q0 * q2);
 
-    hy = 2.0f * mx * (
-        q1 * q2 + q0 * q3
-    )
-    + 2.0f * my * (
-        0.5f - q1 * q1 - q3 * q3
-    )
-    + 2.0f * mz * (
-        q2 * q3 - q0 * q1
-    );
+    hy = 2.0f * mx * (q1 * q2 + q0 * q3)
+       + 2.0f * my * (0.5f - q1 * q1 - q3 * q3)
+       + 2.0f * mz * (q2 * q3 - q0 * q1);
 
     bx = sqrtf(hx * hx + hy * hy);
 
-    bz = 2.0f * mx * (
-        q1 * q3 - q0 * q2
-    )
-    + 2.0f * my * (
-        q2 * q3 + q0 * q1
-    )
-    + 2.0f * mz * (
-        0.5f - q1 * q1 - q2 * q2
-    );
+    bz = 2.0f * mx * (q1 * q3 - q0 * q2)
+       + 2.0f * my * (q2 * q3 + q0 * q1)
+       + 2.0f * mz * (0.5f - q1 * q1 - q2 * q2);
 
 
     // Estimated magnetic field from quaternion
-    wx = 2.0f * bx * (
-        0.5f - q2 * q2 - q3 * q3
-    )
-    + 2.0f * bz * (
-        q1 * q3 - q0 * q2
-    );
+    wx = 2.0f * bx * (0.5f - q2 * q2 - q3 * q3)
+       + 2.0f * bz * (q1 * q3 - q0 * q2);
 
-    wy = 2.0f * bx * (
-        q1 * q2 - q0 * q3
-    )
-    + 2.0f * bz * (
-        q0 * q1 + q2 * q3
-    );
+    wy = 2.0f * bx * (q1 * q2 - q0 * q3)
+       + 2.0f * bz * (q0 * q1 + q2 * q3);
 
-    wz = 2.0f * bx * (
-        q0 * q2 + q1 * q3
-    )
-    + 2.0f * bz * (
-        0.5f - q1 * q1 - q2 * q2
-    );
+    wz = 2.0f * bx * (q0 * q2 + q1 * q3)
+       + 2.0f * bz * (0.5f - q1 * q1 - q2 * q2);
 
 
     // Net error
