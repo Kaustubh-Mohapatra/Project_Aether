@@ -1,16 +1,15 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include <SPI.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
 #include "QMC5883P.h"
 #include <SD.h>
 
-// This is the biggest fish to fry, aka everything (almost) implemented together into 1 thing
-// Still left to integrate: Servo, RXTX, ESC (Probably I wont allow esp to control the bldc but we'll see)
-
 Adafruit_MPU6050 mpu;
 QMC5883P mag(1);
 File logFile;
+Servo aileron, elevator, rudder;
 
 void ReadMPU();
 bool ReadMag();
@@ -197,8 +196,6 @@ void MahonyUpdate(
     vy = 2.0f * (q0 * q1 + q2 * q3);
     vz = q0 * q0 - q1 * q1 - q2 * q2 + q3 * q3;
 
-
-    // Estimated magnetic field direction
     // Estimated magnetic field direction
     hx = 2.0f * mx * (0.5f - q2 * q2 - q3 * q3)
        + 2.0f * my * (q1 * q2 - q0 * q3)
@@ -245,6 +242,11 @@ void MahonyUpdate(
         gx += integralFBx;
         gy += integralFBy;
         gz += integralFBz;
+
+        const float iLimit = 0.5f;   // rad/s
+        integralFBx = constrain(integralFBx, -iLimit, iLimit);
+        integralFBy = constrain(integralFBy, -iLimit, iLimit);
+        integralFBz = constrain(integralFBz, -iLimit, iLimit);
     }
 
     // Proportional feedback
@@ -352,6 +354,10 @@ void setup()
     Wire.begin(21, 22);
     Wire.setClock(100000);
     Wire.setTimeOut(50);
+    aileron.attach(11);
+    elevator.attach(12);
+    rudder.attach(13);
+
 
     if (!mag.begin()) {
         Serial.println("Magnetometer initialization failed");
@@ -385,7 +391,7 @@ void setup()
     //Writing onto SD
     SPI.begin(18, 19, 23, 5);
 
-    if (!SD.begin(5, SPI, 1000000))
+    if (!SD.begin(5, SPI, 4000000))
     {
         Serial.println("SD initialization failed!");
         while(1){
@@ -396,7 +402,14 @@ void setup()
     {
         Serial.println("SD initialized!");
 
-        logFile = SD.open("/flight.csv", FILE_WRITE);
+        char path[24];
+        int n = 0;
+        do {
+            snprintf(path, sizeof(path), "/flight_%04d.csv", n++);
+        } while (SD.exists(path) && n < 10000);
+
+        logFile = SD.open(path, FILE_WRITE);
+        Serial.print("Logging to "); Serial.println(path);
 
         if (!logFile)
         {
@@ -455,8 +468,8 @@ void loop()
     float roll;
     float pitch;
     float yaw;
-    float PitchRate = gx * RAD_TO_DEG;
-    float RollRate = gy * RAD_TO_DEG;
+    float PitchRate = gy * RAD_TO_DEG;
+    float RollRate = gx * RAD_TO_DEG;
     float YawRate = gz * RAD_TO_DEG;
 
     QuaternionToEuler(roll, pitch, yaw);
@@ -478,8 +491,7 @@ void loop()
                 "%.4f,%.4f,%.4f,"
                 "%.4f,%.4f,%.4f,"
                 "%.4f,%.4f,%.4f,"
-                "%.4f,%.4f,%.4f,"
-                "%.4f,%.4f,%.4f",
+                "%.4f,%.4f,%.4f,",
 
                 millis(),
 
@@ -495,7 +507,7 @@ void loop()
 
     static uint32_t lastFlush = 0;
 
-    if (millis() - lastFlush >= 1000)
+    if (millis() - lastFlush >= 250)
     {
         lastFlush = millis();
 

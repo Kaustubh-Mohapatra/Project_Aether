@@ -2,13 +2,13 @@
 #include <Wire.h>
 #include <QMC5883P.h>
 
-Adafruit_QMC5883P mag(1);
+QMC5883P mag(1);
 
 void setup() {
     Serial.begin(115200);
     Wire.begin(21, 22);
 
-    if (!mag.begin(0x1E, &Wire)) {
+    if (!mag.begin(&Wire)) {
         Serial.println("Magnetometer initialization failed");
         while (1) {
             delay(10);

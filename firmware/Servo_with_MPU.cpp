@@ -19,6 +19,16 @@ void setup() {
     mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
     mpu.setGyroRange(MPU6050_RANGE_500_DEG);
     mpu.setFilterBandwidth(MPU6050_BAND_5_HZ);
+
+    if (!mpu.begin(0x68, &Wire)) {
+        Serial.println("IMU initialization check failed");
+        while (1){                                  // Stops the running of code if MPU doesnt get detected so we dont end up messing our other stuff up
+            delay(10);
+        }
+    }
+    else {
+        Serial.println("IMU initialization successful");
+    }
 }
 
 void loop() {
@@ -49,4 +59,5 @@ void loop() {
     lservo.write(servoAngleR);    // Reversed
     cservo.write(servoAngleP);
 
+    delay(20);
 }

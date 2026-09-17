@@ -408,8 +408,8 @@ void loop()
     float roll;
     float pitch;
     float yaw;
-    float PitchRate = gx * RAD_TO_DEG;
-    float RollRate = gy * RAD_TO_DEG;
+    float PitchRate = gy * RAD_TO_DEG;
+    float RollRate = gx * RAD_TO_DEG;
     float YawRate = gz * RAD_TO_DEG;
 
     QuaternionToEuler(roll, pitch, yaw);
