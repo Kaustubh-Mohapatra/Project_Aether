@@ -352,7 +352,7 @@ void setup()
 {
     Serial.begin(115200);
     Wire.begin(21, 22);
-    Wire.setClock(100000);
+    Wire.setClock(400000);
     Wire.setTimeOut(50);
     aileron.attach(11);
     elevator.attach(12);
