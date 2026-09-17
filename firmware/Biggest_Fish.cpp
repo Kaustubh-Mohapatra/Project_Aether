@@ -3,6 +3,7 @@
 #include <SPI.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
+#include <ESP32Servo.h>
 #include "QMC5883P.h"
 #include <SD.h>
 
@@ -401,7 +402,7 @@ void setup()
     else
     {
         Serial.println("SD initialized!");
-
+    }
         char path[24];
         int n = 0;
         do {
@@ -429,7 +430,6 @@ void setup()
 
             Serial.println("Logging started.");
         }
-    }
 
     // Start timing AFTER calibration
     lastTime = micros();
