@@ -490,8 +490,6 @@ void loop()
     float PitchRate = gy * RAD_TO_DEG;
     float RollRate = gx * RAD_TO_DEG;
     float YawRate = gz * RAD_TO_DEG;
-    float magYaw = atan2f(my, mx) * RAD_TO_DEG;
-    if (magYaw < 0) magYaw += 360.0f;
 
     servoAngleP = 90 - pitch;
     servoAngleR = 90 - roll;
@@ -548,8 +546,6 @@ void loop()
     Serial.print(roll);
     Serial.print(" | Yaw: ");
     Serial.print(yaw);
-    Serial.print(" | Mag Yaw: ");
-    Serial.print(magYaw);
 
     Serial.print(" | Pitch Rate: ");
     Serial.print(PitchRate);
