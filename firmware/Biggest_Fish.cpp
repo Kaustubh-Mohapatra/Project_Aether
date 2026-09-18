@@ -12,7 +12,7 @@ QMC5883P mag(1);
 File logFile;
 Servo aileron, elevator, rudder;
 
-void ReadMPU();
+bool ReadMPU();
 bool ReadMag();
 
 // Vars
@@ -25,7 +25,7 @@ float q3 = 0.0f;
 
 
 // Filter tuning [Haven't tuned it yet, will tune it later]
-float Kp = 2.0f;
+float Kp = 3.0f;
 float Ki = 0.05f;
 
 // Integral error
@@ -50,6 +50,11 @@ float gyroBiasZ = 0.0f;
 float magBiasX = 0.0f;
 float magBiasY = 0.0f;
 float magBiasZ = 0.0f;
+
+// Servo constraints
+int servoAngleP = constrain(servoAngleP, 20, 160);
+int servoAngleR = constrain(servoAngleR, 20, 160);
+int servoAngleY = constrain(servoAngleY, 20, 160);
 
 void calibrateGyro()
 {
@@ -235,19 +240,25 @@ void MahonyUpdate(
        + (mx * wy - my * wx);
 
     // Integral feedback [In an if so i can turn it off if Ki = 0]
-    if (Ki > 0.0f){
+    if (Ki <= 0.0f)
+    {
+        integralFBx = 0.0f;
+        integralFBy = 0.0f;
+        integralFBz = 0.0f;
+    }
+    else{
         integralFBx += Ki * ex * dt;
         integralFBy += Ki * ey * dt;
         integralFBz += Ki * ez * dt;
-
-        gx += integralFBx;
-        gy += integralFBy;
-        gz += integralFBz;
 
         const float iLimit = 0.5f;   // rad/s
         integralFBx = constrain(integralFBx, -iLimit, iLimit);
         integralFBy = constrain(integralFBy, -iLimit, iLimit);
         integralFBz = constrain(integralFBz, -iLimit, iLimit);
+
+        gx += integralFBx;
+        gy += integralFBy;
+        gz += integralFBz;
     }
 
     // Proportional feedback
@@ -318,18 +329,24 @@ void QuaternionToEuler(
 }
 
 // IMU readings
-void ReadMPU()
+bool ReadMPU()
 {
     sensors_event_t a = {};
     sensors_event_t g = {};
     sensors_event_t temp = {};
-    mpu.getEvent(&a, &g, &temp);
+    if (!mpu.getEvent(&a, &g, &temp))
+    {
+        return false;
+    }
+
     ax = a.acceleration.x;
     ay = a.acceleration.y;
     az = a.acceleration.z;
     gx = g.gyro.x - gyroBiasX;
     gy = g.gyro.y - gyroBiasY;
     gz = g.gyro.z - gyroBiasZ;
+
+    return true;
 }
 
 // Magnetometer readings
@@ -355,9 +372,9 @@ void setup()
     Wire.begin(21, 22);
     Wire.setClock(400000);
     Wire.setTimeOut(50);
-    aileron.attach(11);
-    elevator.attach(12);
-    rudder.attach(13);
+    aileron.attach(25);
+    elevator.attach(32);
+    rudder.attach(33);
 
 
     if (!mag.begin()) {
@@ -366,9 +383,8 @@ void setup()
             delay(10);
           }
     }
-    else{
-        Serial.println("Magnetometer initialization successful");
-    }
+    else    Serial.println("Magnetometer initialization successful");
+
 
     if (!mpu.begin(0x68, &Wire))
     {
@@ -377,7 +393,18 @@ void setup()
             delay(10);
         }
     }
-    Serial.println("IMU initialization successful");
+    else    Serial.println("IMU initialization successful");
+
+    SPI.begin(18, 19, 23, 5);
+
+    if (!SD.begin(5, SPI, 4000000))
+    {
+        Serial.println("SD initialization failed!");
+        while(1){
+            delay(10);
+        }
+    }
+    else    Serial.println("SD initialization successful");
 
     // Configure MPU
     mpu.setGyroRange(MPU6050_RANGE_500_DEG);
@@ -390,46 +417,33 @@ void setup()
     calibrateMag();
 
     //Writing onto SD
-    SPI.begin(18, 19, 23, 5);
+    char path[24];
+    int n = 0;
+    do {
+        snprintf(path, sizeof(path), "/flight_%04d.csv", n++);
+    } while (SD.exists(path) && n < 10000);
 
-    if (!SD.begin(5, SPI, 4000000))
+    logFile = SD.open(path, FILE_WRITE);
+    Serial.print("Logging to "); Serial.println(path);
+
+    if (!logFile)
     {
-        Serial.println("SD initialization failed!");
-        while(1){
-            delay(10);
-        }
+        Serial.println("Failed to open flight.csv!");
     }
     else
     {
-        Serial.println("SD initialized!");
+        logFile.println(
+            "time,"
+            "ax,ay,az,"
+            "gx,gy,gz,"
+            "mx,my,mz,"
+            "pitch,roll,yaw"
+        );
+
+        logFile.flush();
+
+        Serial.println("Logging started.");
     }
-        char path[24];
-        int n = 0;
-        do {
-            snprintf(path, sizeof(path), "/flight_%04d.csv", n++);
-        } while (SD.exists(path) && n < 10000);
-
-        logFile = SD.open(path, FILE_WRITE);
-        Serial.print("Logging to "); Serial.println(path);
-
-        if (!logFile)
-        {
-            Serial.println("Failed to open flight.csv!");
-        }
-        else
-        {
-            logFile.println(
-                "time,"
-                "ax,ay,az,"
-                "gx,gy,gz,"
-                "mx,my,mz,"
-                "pitch,roll,yaw"
-            );
-
-            logFile.flush();
-
-            Serial.println("Logging started.");
-        }
 
     // Start timing AFTER calibration
     lastTime = micros();
@@ -450,8 +464,13 @@ void loop()
 
     lastTime = currentTime;
 
-    ReadMPU();
+    bool imuOK = ReadMPU();
     bool magOK = ReadMag();
+
+    if (!imuOK)
+    {
+        Serial.println("IMU READ FAILED");
+    }
 
     if (!magOK)
     {
@@ -459,7 +478,7 @@ void loop()
     }
 
     // Run filter
-    if (magOK)
+    if (magOK && imuOK)
     {
         MahonyUpdate(gx, gy, gz, ax, ay, az, mx, my, mz, dt);
     }
@@ -471,6 +490,12 @@ void loop()
     float PitchRate = gy * RAD_TO_DEG;
     float RollRate = gx * RAD_TO_DEG;
     float YawRate = gz * RAD_TO_DEG;
+    float magYaw = atan2f(my, mx) * RAD_TO_DEG;
+    if (magYaw < 0) magYaw += 360.0f;
+
+    servoAngleP = 90 - pitch;
+    servoAngleR = 90 - roll;
+    servoAngleY = 90 - yaw;
 
     QuaternionToEuler(roll, pitch, yaw);
 
@@ -491,14 +516,16 @@ void loop()
                 "%.4f,%.4f,%.4f,"
                 "%.4f,%.4f,%.4f,"
                 "%.4f,%.4f,%.4f,"
-                "%.4f,%.4f,%.4f,",
+                "%.4f,%.4f,%.4f,"
+                "%.4f,%.4f,%.4f",
 
                 millis(),
 
                 ax, ay, az,
                 gx, gy, gz,
                 mx, my, mz,
-                pitch, roll, yaw
+                pitch, roll, yaw,
+                servoAngleP,servoAngleR,servoAngleY
             );
 
             logFile.println(line);
@@ -517,16 +544,17 @@ void loop()
 
     Serial.print("Pitch: ");
     Serial.print(pitch);
-    Serial.print(" | Pitch Rate: ");
-    Serial.print(PitchRate);
-
     Serial.print(" | Roll: ");
     Serial.print(roll);
-    Serial.print(" | Roll Rate: ");
-    Serial.print(RollRate);
-
     Serial.print(" | Yaw: ");
     Serial.print(yaw);
+    Serial.print(" | Mag Yaw: ");
+    Serial.print(magYaw);
+
+    Serial.print(" | Pitch Rate: ");
+    Serial.print(PitchRate);
+    Serial.print(" | Roll Rate: ");
+    Serial.print(RollRate);
     Serial.print(" | Yaw Rate: ");
     Serial.println(YawRate);
     delay(5);

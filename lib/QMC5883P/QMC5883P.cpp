@@ -124,12 +124,18 @@ bool QMC5883P::readRegisters(uint8_t reg, uint8_t *buffer, uint8_t length)
 
 bool QMC5883P::read()
 {
+    uint8_t status;
+
+    if (!readRegisters(QMC5883P_STATUS_REG, &status, 1))
+        return false;
+
+    if (!(status & 0x01))
+        return false;
+
     uint8_t buffer[6];
 
     if (!readRegisters(QMC5883P_DATA_REG, buffer, 6))
-    {
         return false;
-    }
 
     int16_t rawX = (int16_t)((buffer[1] << 8) | buffer[0]);
     int16_t rawY = (int16_t)((buffer[3] << 8) | buffer[2]);

@@ -1,7 +1,7 @@
 {
     "name": "QMC5883P",
     "version": "0.1.0",
-    "description": "QMC5883L magnetometer library",
+    "description": "QMC5883P magnetometer library",
     "frameworks": "arduino",
     "platforms": "espressif32"
 }

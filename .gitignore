@@ -5,7 +5,6 @@ include/
 test/
 compile_commands.json
 extra_script.py
-platformio.ini
 
 # Zed local settings/cache
 .zed/

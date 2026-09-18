@@ -394,7 +394,9 @@ void loop()
     unsigned long currentTime = micros();
     float dt = (currentTime - lastTime) / 1000000.0f;
     lastTime = currentTime;
-    if (dt <= 0.0f || dt > 0.1f) {                      // Filter bad dt
+    if (dt <= 0.0001f || dt > 0.02f)
+    {
+        lastTime = currentTime;
         return;
     }
 
