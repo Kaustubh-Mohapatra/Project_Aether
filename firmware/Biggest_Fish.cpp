@@ -51,11 +51,6 @@ float magBiasX = 0.0f;
 float magBiasY = 0.0f;
 float magBiasZ = 0.0f;
 
-// Servo constraints
-int servoAngleP = constrain(servoAngleP, 20, 160);
-int servoAngleR = constrain(servoAngleR, 20, 160);
-int servoAngleY = constrain(servoAngleY, 20, 160);
-
 void calibrateGyro()
 {
     const int samples = 2000;
@@ -491,10 +486,6 @@ void loop()
     float RollRate = gx * RAD_TO_DEG;
     float YawRate = gz * RAD_TO_DEG;
 
-    servoAngleP = 90 - pitch;
-    servoAngleR = 90 - roll;
-    servoAngleY = 90 - yaw;
-
     QuaternionToEuler(roll, pitch, yaw);
 
     static uint32_t lastLog = 0;
@@ -539,6 +530,14 @@ void loop()
         if (logFile)
             logFile.flush();
     }
+
+    // Servo constraints
+    int servoAngleP = constrain(servoAngleP, 20, 160);
+    int servoAngleR = constrain(servoAngleR, 20, 160);
+    int servoAngleY = constrain(servoAngleY, 20, 160);
+    servoAngleP = 90 - pitch;
+    servoAngleR = 90 - roll;
+    servoAngleY = 90 - yaw;
 
     Serial.print("Pitch: ");
     Serial.print(pitch);
