@@ -488,6 +488,14 @@ void loop()
 
     QuaternionToEuler(roll, pitch, yaw);
 
+    // Servo constraints
+    int servoAngleP = constrain(servoAngleP, 20, 160);
+    int servoAngleR = constrain(servoAngleR, 20, 160);
+    int servoAngleY = constrain(servoAngleY, 20, 160);
+    servoAngleP = 90 - pitch;
+    servoAngleR = 90 - roll;
+    servoAngleY = 90 - yaw;
+
     static uint32_t lastLog = 0;
 
     if (millis() - lastLog >= 10)
@@ -530,14 +538,6 @@ void loop()
         if (logFile)
             logFile.flush();
     }
-
-    // Servo constraints
-    int servoAngleP = constrain(servoAngleP, 20, 160);
-    int servoAngleR = constrain(servoAngleR, 20, 160);
-    int servoAngleY = constrain(servoAngleY, 20, 160);
-    servoAngleP = 90 - pitch;
-    servoAngleR = 90 - roll;
-    servoAngleY = 90 - yaw;
 
     Serial.print("Pitch: ");
     Serial.print(pitch);
