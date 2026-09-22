@@ -22,7 +22,7 @@ void setup(){
 
 void loop()
 {
-    float h = bmp.readAltitude(1013.25);
+    float h = bmp.readAltitude(1013.25);    // 1013.25 is standard sea level pressure in hPa
     float p = bmp.readPressure();
     float temp = bmp.readTemperature();
 
