@@ -432,7 +432,8 @@ void setup()
             "ax,ay,az,"
             "gx,gy,gz,"
             "mx,my,mz,"
-            "pitch,roll,yaw"
+            "pitch,roll,yaw,"
+            "servoAngleP,servoAngleR,servoAngleY"
         );
 
         logFile.flush();
