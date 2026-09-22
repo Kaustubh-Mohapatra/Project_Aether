@@ -91,8 +91,6 @@ void loop(){
     sensors_event_t temp = {};
     mpu.getEvent(&a, &g, &temp);
 
-    Wire.beginTransmission(0x68);
-
     if (Wire.endTransmission() != 0) {
         Serial.println("IMU LOST!");        // Stops the running of code if MPU fails mid flight
         // autopilotEnabled = false;
