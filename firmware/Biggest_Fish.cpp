@@ -489,13 +489,13 @@ void loop()
 
     QuaternionToEuler(roll, pitch, yaw);
 
-    // Servo constraints
+    // Servo constraints (dependent on the axis of IMU)
     int servoAngleP = constrain(servoAngleP, 20, 160);
     int servoAngleR = constrain(servoAngleR, 20, 160);
     int servoAngleY = constrain(servoAngleY, 20, 160);
-    servoAngleP = 90 - pitch;
-    servoAngleR = 90 - roll;
-    servoAngleY = 90 - yaw;
+    servoAngleP = pitch;
+    servoAngleR = roll;
+    servoAngleY = yaw;
 
     static uint32_t lastLog = 0;
 
