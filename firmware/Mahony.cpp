@@ -7,8 +7,8 @@
 Adafruit_MPU6050 mpu;
 QMC5883P mag(1);
 
-void ReadMPU();
-void ReadMag();
+bool ReadMPU();
+bool ReadMag();
 
 // Vars
 
@@ -20,7 +20,7 @@ float q3 = 0.0f;
 
 
 // Filter tuning [Haven't tuned it yet, will tune it later]
-float Kp = 2.0f;
+float Kp = 3.0f;
 float Ki = 0.05f;
 
 // Integral error
@@ -103,15 +103,16 @@ void calibrateMag()
 
     while (millis() - startTime < 15000)
     {
-        ReadMag();
+        if (ReadMag())
+        {
+            minX = min(minX, mx);
+            minY = min(minY, my);
+            minZ = min(minZ, mz);
 
-        minX = min(minX, mx);
-        minY = min(minY, my);
-        minZ = min(minZ, mz);
-
-        maxX = max(maxX, mx);
-        maxY = max(maxY, my);
-        maxZ = max(maxZ, mz);
+            maxX = max(maxX, mx);
+            maxY = max(maxY, my);
+            maxZ = max(maxZ, mz);
+        }
 
         delay(10);
     }
@@ -155,15 +156,6 @@ void MahonyUpdate(
     float dt
     )
 {
-    Serial.print("Q: ");
-    Serial.print(q0, 6);
-    Serial.print(", ");
-    Serial.print(q1, 6);
-    Serial.print(", ");
-    Serial.print(q2, 6);
-    Serial.print(", ");
-    Serial.println(q3, 6);
-
     float normi;
     float normm;
     float vx, vy, vz;
@@ -200,38 +192,31 @@ void MahonyUpdate(
     vy = 2.0f * (q0 * q1 + q2 * q3);
     vz = q0 * q0 - q1 * q1 - q2 * q2 + q3 * q3;
 
-
     // Estimated magnetic field direction
-    hx =
-        2.0f * mx * (0.5f - q2*q2 - q3*q3) +
-        2.0f * my * (q1*q2 - q0*q3) +
-        2.0f * mz * (q1*q3 + q0*q2);
+    hx = 2.0f * mx * (0.5f - q2 * q2 - q3 * q3)
+       + 2.0f * my * (q1 * q2 - q0 * q3)
+       + 2.0f * mz * (q1 * q3 + q0 * q2);
 
-    hy =
-        2.0f * mx * (q1*q2 + q0*q3) +
-        2.0f * my * (0.5f - q1*q1 - q3*q3) +
-        2.0f * mz * (q2*q3 - q0*q1);
+    hy = 2.0f * mx * (q1 * q2 + q0 * q3)
+       + 2.0f * my * (0.5f - q1 * q1 - q3 * q3)
+       + 2.0f * mz * (q2 * q3 - q0 * q1);
 
-    bx = sqrtf(hx*hx + hy*hy);
+    bx = sqrtf(hx * hx + hy * hy);
 
-    bz =
-        2.0f * mx * (q1*q3 - q0*q2) +
-        2.0f * my * (q2*q3 + q0*q1) +
-        2.0f * mz * (0.5f - q1*q1 - q2*q2);
+    bz = 2.0f * mx * (q1 * q3 - q0 * q2)
+       + 2.0f * my * (q2 * q3 + q0 * q1)
+       + 2.0f * mz * (0.5f - q1 * q1 - q2 * q2);
 
 
     // Estimated magnetic field from quaternion
-    wx =
-        2.0f * bx * (0.5f - q2*q2 - q3*q3) +
-        2.0f * bz * (q1*q3 - q0*q2);
+    wx = 2.0f * bx * (0.5f - q2 * q2 - q3 * q3)
+       + 2.0f * bz * (q1 * q3 - q0 * q2);
 
-    wy =
-        2.0f * bx * (q1*q2 - q0*q3) +
-        2.0f * bz * (q0*q1 + q2*q3);
+    wy = 2.0f * bx * (q1 * q2 - q0 * q3)
+       + 2.0f * bz * (q0 * q1 + q2 * q3);
 
-    wz =
-        2.0f * bx * (q0*q2 + q1*q3) +
-        2.0f * bz * (0.5f - q1*q1 - q2*q2);
+    wz = 2.0f * bx * (q0 * q2 + q1 * q3)
+       + 2.0f * bz * (0.5f - q1 * q1 - q2 * q2);
 
 
     // Net error
@@ -245,10 +230,21 @@ void MahonyUpdate(
        + (mx * wy - my * wx);
 
     // Integral feedback [In an if so i can turn it off if Ki = 0]
-    if (Ki > 0.0f){
+    if (Ki <= 0.0f)
+    {
+        integralFBx = 0.0f;
+        integralFBy = 0.0f;
+        integralFBz = 0.0f;
+    }
+    else{
         integralFBx += Ki * ex * dt;
         integralFBy += Ki * ey * dt;
         integralFBz += Ki * ez * dt;
+
+        const float iLimit = 0.5f;   // rad/s
+        integralFBx = constrain(integralFBx, -iLimit, iLimit);
+        integralFBy = constrain(integralFBy, -iLimit, iLimit);
+        integralFBz = constrain(integralFBz, -iLimit, iLimit);
 
         gx += integralFBx;
         gy += integralFBy;
@@ -323,35 +319,48 @@ void QuaternionToEuler(
 }
 
 // IMU readings
-void ReadMPU()
+bool ReadMPU()
 {
     sensors_event_t a = {};
     sensors_event_t g = {};
     sensors_event_t temp = {};
-    mpu.getEvent(&a, &g, &temp);
+    if (!mpu.getEvent(&a, &g, &temp))
+    {
+        return false;
+    }
+
     ax = a.acceleration.x;
     ay = a.acceleration.y;
     az = a.acceleration.z;
     gx = g.gyro.x - gyroBiasX;
     gy = g.gyro.y - gyroBiasY;
     gz = g.gyro.z - gyroBiasZ;
+
+    return true;
 }
 
 // Magnetometer readings
-void ReadMag()
+bool ReadMag()
 {
-    sensors_event_t m;
-    mag.getEvent(&m);
+    sensors_event_t m = {};
+
+    if (!mag.getEvent(&m))
+    {
+        return false;
+    }
+
     mx = m.magnetic.x - magBiasX;
     my = m.magnetic.y - magBiasY;
     mz = m.magnetic.z - magBiasZ;
+
+    return true;
 }
 
 void setup()
 {
     Serial.begin(115200);
     Wire.begin(21, 22);
-    Wire.setClock(100000);
+    Wire.setClock(400000);
     Wire.setTimeOut(50);
 
     if (!mag.begin()) {
@@ -360,9 +369,8 @@ void setup()
             delay(10);
           }
     }
-    else{
-        Serial.println("Magnetometer initialization successful");
-    }
+    else    Serial.println("Magnetometer initialization successful");
+
 
     if (!mpu.begin(0x68, &Wire))
     {
@@ -371,8 +379,7 @@ void setup()
             delay(10);
         }
     }
-    Serial.println("IMU initialization successful");
-
+    else    Serial.println("IMU initialization successful");
     // Configure MPU
     mpu.setGyroRange(MPU6050_RANGE_500_DEG);
     mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
@@ -393,18 +400,33 @@ void loop()
     // Calculate delta time
     unsigned long currentTime = micros();
     float dt = (currentTime - lastTime) / 1000000.0f;
-    lastTime = currentTime;
-    if (dt <= 0.0001f || dt > 0.02f)
+
+    if (dt <= 0.0f || dt > 0.1f)
     {
-        lastTime = currentTime;
+        lastTime = currentTime;     // filter bad dt
         return;
     }
 
-    ReadMPU();
-    ReadMag();
+    lastTime = currentTime;
+
+    bool imuOK = ReadMPU();
+    bool magOK = ReadMag();
+
+    if (!imuOK)
+    {
+        Serial.println("IMU READ FAILED");
+    }
+
+    if (!magOK)
+    {
+        Serial.println("MAG READ FAILED");
+    }
 
     // Run filter
-    MahonyUpdate(gx, gy, gz, ax, ay, az, mx, my, mz, dt);
+    if (magOK && imuOK)
+    {
+        MahonyUpdate(gx, gy, gz, ax, ay, az, mx, my, mz, dt);
+    }
 
     // Get Euler angles
     float roll;
@@ -418,16 +440,15 @@ void loop()
 
     Serial.print("Pitch: ");
     Serial.print(pitch);
-    Serial.print(" | Pitch Rate: ");
-    Serial.print(PitchRate);
-
     Serial.print(" | Roll: ");
     Serial.print(roll);
-    Serial.print(" | Roll Rate: ");
-    Serial.print(RollRate);
-
     Serial.print(" | Yaw: ");
     Serial.print(yaw);
+
+    Serial.print(" | Pitch Rate: ");
+    Serial.print(PitchRate);
+    Serial.print(" | Roll Rate: ");
+    Serial.print(RollRate);
     Serial.print(" | Yaw Rate: ");
     Serial.println(YawRate);
     delay(5);
