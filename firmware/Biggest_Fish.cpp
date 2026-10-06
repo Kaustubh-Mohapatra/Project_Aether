@@ -12,6 +12,12 @@ QMC5883P mag(1);
 File logFile;
 Servo aileron, elevator, rudder;
 
+#define MPU_INT_PIN 27      // drdy bit
+volatile bool imuDataReady = false;
+void IRAM_ATTR mpuISR(){
+    imuDataReady = true;
+}
+
 bool ReadMPU();
 bool ReadMag();
 
@@ -349,10 +355,7 @@ bool ReadMag()
 {
     sensors_event_t m = {};
 
-    if (!mag.getEvent(&m))
-    {
-        return false;
-    }
+    if (!mag.getEvent(&m)) return false;
 
     mx = m.magnetic.x - magBiasX;
     my = m.magnetic.y - magBiasY;
@@ -404,6 +407,28 @@ void setup()
     // Configure MPU
     mpu.setGyroRange(MPU6050_RANGE_500_DEG);
     mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
+
+    // Reading data from MPU with drdy
+    // internal sample rate = 1 kHz
+    Wire.beginTransmission(0x68);
+    Wire.write(0x19);
+    Wire.write(9);
+    Wire.endTransmission();
+
+    // Enable DATA_RDY interrupt
+    Wire.beginTransmission(0x68);
+    Wire.write(0x38);      // INT_ENABLE
+    Wire.write(0x01);      // DATA_RDY_EN
+    Wire.endTransmission();
+
+    // net sample rate = 1khz / (9+1) = 100hz
+    // MPU6050 INT
+    pinMode(MPU_INT_PIN, INPUT);
+    attachInterrupt(
+        digitalPinToInterrupt(MPU_INT_PIN),
+        mpuISR,
+        RISING
+    );
 
     // WE MUST be stationary here
     calibrateGyro();
@@ -471,6 +496,12 @@ void loop()
     if (!magOK)
     {
         Serial.println("MAG READ FAILED");
+    }
+
+    // Read data from MPU as soon as its ready
+    if (imuDataReady) {
+        imuDataReady = false;
+        ReadMPU();
     }
 
     // Run filter

@@ -5,11 +5,15 @@
 
 Adafruit_MPU6050 mpu;           // Initialize the device
 
+#define MPU_INT_PIN 27
+volatile bool imuDataReady = false;
+void IRAM_ATTR mpuISR(){
+    imuDataReady = true;
+}
+
 void setup(){
     Serial.begin(115200);
-
     Wire.begin(21, 22);
-
     Serial.println("IMU test");
 
     if (!mpu.begin(0x68, &Wire)) {
@@ -18,9 +22,7 @@ void setup(){
             delay(10);
         }
     }
-    else {
-        Serial.println("IMU initialization successful");
-    }
+    Serial.println("IMU initialization successful");
 
     mpu.setAccelerometerRange(MPU6050_RANGE_8_G);   // Sets Accelerometer range of MPU
     Serial.print("Accelerometer range set to: ");
@@ -57,6 +59,30 @@ void setup(){
     }
 
     mpu.setFilterBandwidth(MPU6050_BAND_5_HZ);  // Sets the filter bandwidth
+
+    // internal sample rate = 1 kHz
+    // SMPLRT_DIV = 9, data-ready rate = 100 Hz
+    Wire.beginTransmission(0x68);
+    Wire.write(0x19);
+    Wire.write(9);
+    Wire.endTransmission();
+
+    // Enable DATA_RDY interrupt
+    Wire.beginTransmission(0x68);
+    Wire.write(0x38);      // INT_ENABLE
+    Wire.write(0x01);      // DATA_RDY_EN
+    Wire.endTransmission();
+
+    // net sample rate = 1khz / (9+1)
+    // MPU6050 INT
+    pinMode(MPU_INT_PIN, INPUT);
+    attachInterrupt(
+        digitalPinToInterrupt(MPU_INT_PIN),
+        mpuISR,
+        RISING
+    );
+
+    Serial.println("MPU6050 data-ready interrupt enabled at 100 Hz");
     Serial.print("Filter bandwidth set to: ");
     switch (mpu.getFilterBandwidth()) {
         case MPU6050_BAND_260_HZ:
@@ -86,37 +112,37 @@ void setup(){
 }
 
 void loop(){
-    sensors_event_t a = {}; // gets me dem values
-    sensors_event_t g = {};
-    sensors_event_t temp = {};
-    mpu.getEvent(&a, &g, &temp);
 
-    if (Wire.endTransmission() != 0) {
-        Serial.println("IMU LOST!");        // Stops the running of code if MPU fails mid flight
-        // autopilotEnabled = false;
+    // Only read the MPU when its data-ready is ready
+    if (imuDataReady) {
+        imuDataReady = false;
+
+        sensors_event_t a = {};
+        sensors_event_t g = {};
+        sensors_event_t temp = {};
+
+        mpu.getEvent(&a, &g, &temp);
+
+        Serial.print("Acceleration X: ");
+        Serial.print(a.acceleration.x);
+        Serial.print(", Y: ");
+        Serial.print(a.acceleration.y);
+        Serial.print(", Z: ");
+        Serial.print(a.acceleration.z);
+        Serial.println(" m/s^2");
+
+        Serial.print("Rotation X: ");
+        Serial.print(g.gyro.x);
+        Serial.print(", Y: ");
+        Serial.print(g.gyro.y);
+        Serial.print(", Z: ");
+        Serial.print(g.gyro.z);
+        Serial.println(" rad/s");
+
+        Serial.print("Temperature: ");
+        Serial.print(temp.temperature);
+        Serial.println(" C");
+
+        Serial.println("");
     }
-
-    Serial.print("Acceleration X: "); // Prints dem values
-    Serial.print(a.acceleration.x);
-    Serial.print(", Y: ");
-    Serial.print(a.acceleration.y);
-    Serial.print(", Z: ");
-    Serial.print(a.acceleration.z);
-    Serial.println(" m/s^2");
-
-    Serial.print("Rotation X: ");
-    Serial.print(g.gyro.x);
-    Serial.print(", Y: ");
-    Serial.print(g.gyro.y);
-    Serial.print(", Z: ");
-    Serial.print(g.gyro.z);
-    Serial.println(" rad/s");
-
-    Serial.print("Temperature: ");
-    Serial.print(temp.temperature);
-    Serial.println(" C");
-
-    Serial.println(""); //gets me dem values printed every 0.5s
-    delay(500);
-
 }
