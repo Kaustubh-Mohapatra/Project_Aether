@@ -12,6 +12,20 @@ QMC5883P mag(1);
 File logFile;
 Servo aileron, elevator, rudder;
 
+// Shared snapshot: Core 1 publishes flight data, Core 0 logs it.
+struct FlightData {
+    float ax, ay, az;
+    float gx, gy, gz;
+    float mx, my, mz;
+    float pitch, roll, yaw;
+    float pitchRate, rollRate, yawRate;
+    int servoAngleP, servoAngleR, servoAngleY;
+};
+
+FlightData flightData = {};
+portMUX_TYPE flightDataMux = portMUX_INITIALIZER_UNLOCKED;
+TaskHandle_t sdTaskHandle = NULL;
+
 #define MPU_INT_PIN 27      // drdy bit
 volatile bool imuDataReady = false;
 void IRAM_ATTR mpuISR(){
@@ -46,6 +60,7 @@ unsigned long lastTime = 0;
 float ax, ay, az;
 float gx, gy, gz;
 float mx, my, mz;
+float declinationAngle = -0.61f * DEG_TO_RAD;
 
 // IMU Bias correction
 float gyroBiasX = 0.0f;
@@ -53,9 +68,15 @@ float gyroBiasY = 0.0f;
 float gyroBiasZ = 0.0f;
 
 // Mag Calibration
+// Hard iron offsets
 float magBiasX = 0.0f;
 float magBiasY = 0.0f;
 float magBiasZ = 0.0f;
+
+// Soft iron scales
+float magScaleX = 1.0f;
+float magScaleY = 1.0f;
+float magScaleZ = 1.0f;
 
 void calibrateGyro()
 {
@@ -132,6 +153,29 @@ void calibrateMag()
     magBiasY = (maxY + minY) * 0.5f;
     magBiasZ = (maxZ + minZ) * 0.5f;
 
+    // Half-range of each axis
+    float radiusX = (maxX - minX) * 0.5f;
+    float radiusY = (maxY - minY) * 0.5f;
+    float radiusZ = (maxZ - minZ) * 0.5f;
+
+    // Protect against invalid calibration data
+    if (radiusX <= 0.0f || radiusY <= 0.0f || radiusZ <= 0.0f)
+    {
+        Serial.println("Mag calibration failed: invalid axis range");
+        magScaleX = 1.0f;
+        magScaleY = 1.0f;
+        magScaleZ = 1.0f;
+        return;
+    }
+
+    // Desired common radius
+    float averageRadius = (radiusX + radiusY + radiusZ) / 3.0f;
+
+    // Soft-iron scale correction
+    magScaleX = averageRadius / radiusX;
+    magScaleY = averageRadius / radiusY;
+    magScaleZ = averageRadius / radiusZ;
+
     Serial.println("Mag calibration complete");
 
     Serial.print("Mag X bias: ");
@@ -142,6 +186,15 @@ void calibrateMag()
 
     Serial.print("Mag Z bias: ");
     Serial.println(magBiasZ);
+
+    Serial.print("Mag X scale: ");
+    Serial.println(magScaleX, 6);
+
+    Serial.print("Mag Y scale: ");
+    Serial.println(magScaleY, 6);
+
+    Serial.print("Mag Z scale: ");
+    Serial.println(magScaleZ, 6);
 }
 
 // MAHONY FILTER
@@ -240,7 +293,7 @@ void MahonyUpdate(
     ez = (ax * vy - ay * vx)
        + (mx * wy - my * wx);
 
-    // Integral feedback [In an if so i can turn it off if Ki = 0]
+    // Integral feedback [In an if so I can turn it off if Ki or Kp = 0]
     if (Ki <= 0.0f)
     {
         integralFBx = 0.0f;
@@ -322,6 +375,7 @@ void QuaternionToEuler(
         2.0f * (q0 * q3 + q1 * q2),
         1.0f - 2.0f * (q2 * q2 + q3 * q3)
     );
+    yaw += declinationAngle;
 
     // Convert radians → degrees
     roll  *= RAD_TO_DEG;
@@ -357,12 +411,62 @@ bool ReadMag()
 
     if (!mag.getEvent(&m)) return false;
 
-    mx = m.magnetic.x - magBiasX;
-    my = m.magnetic.y - magBiasY;
-    mz = m.magnetic.z - magBiasZ;
+    mx = (m.magnetic.x - magBiasX) * magScaleX;
+    my = (m.magnetic.y - magBiasY) * magScaleY;
+    mz = (m.magnetic.z - magBiasZ) * magScaleZ;
 
     return true;
 }
+
+void SDTask(void *parameter)
+{
+    uint32_t lastFlush = millis();
+
+    while (true)
+    {
+
+        if (logFile)
+        {
+            char line[256];
+
+            snprintf(
+                line,
+                sizeof(line),
+                "%lu,"
+                "%.4f,%.4f,%.4f,"
+                "%.4f,%.4f,%.4f,"
+                "%.4f,%.4f,%.4f,"
+                "%.4f,%.4f,%.4f,"
+                "%d,%d,%d",
+
+                millis(),
+
+                snapshot.ax, snapshot.ay, snapshot.az,
+                snapshot.gx, snapshot.gy, snapshot.gz,
+                snapshot.mx, snapshot.my, snapshot.mz,
+                snapshot.pitch, snapshot.roll, snapshot.yaw,
+                snapshot.servoAngleP,
+                snapshot.servoAngleR,
+                snapshot.servoAngleY
+            );
+
+            logFile.println(line);
+        }
+
+        // Flush periodically without blocking Core 1.
+        if (millis() - lastFlush >= 250)
+        {
+            lastFlush = millis();
+
+            if (logFile)
+                logFile.flush();
+        }
+
+        // 100 Hz logging.
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
 
 void setup()
 {
@@ -403,6 +507,17 @@ void setup()
         }
     }
     else    Serial.println("SD initialization successful");
+
+    // Shift logging to core 0
+    xTaskCreatePinnedToCore(
+        SDTask,
+        "SD Logger",
+        4096,
+        NULL,
+        1,
+        &sdTaskHandle,
+        0
+    );
 
     // Configure MPU
     mpu.setGyroRange(MPU6050_RANGE_500_DEG);
@@ -485,23 +600,15 @@ void loop()
 
     lastTime = currentTime;
 
-    bool imuOK = ReadMPU();
+    bool imuOK = 0;
     bool magOK = ReadMag();
 
-    if (!imuOK)
-    {
-        Serial.println("IMU READ FAILED");
-    }
-
-    if (!magOK)
-    {
-        Serial.println("MAG READ FAILED");
-    }
+    if (!magOK)     Serial.println("MAG READ FAILED");
 
     // Read data from MPU as soon as its ready
     if (imuDataReady) {
         imuDataReady = false;
-        ReadMPU();
+        imuOK = ReadMPU();
     }
 
     // Run filter
@@ -521,55 +628,36 @@ void loop()
     QuaternionToEuler(roll, pitch, yaw);
 
     // Servo constraints (dependent on the axis of IMU)
-    int servoAngleP = constrain(servoAngleP, 20, 160);
-    int servoAngleR = constrain(servoAngleR, 20, 160);
-    int servoAngleY = constrain(servoAngleY, 20, 160);
-    servoAngleP = pitch;
-    servoAngleR = roll;
-    servoAngleY = yaw;
+    int servoAngleP = constrain(pitch, 20, 160);
+    int servoAngleR = constrain(roll, 20, 160);
+    int servoAngleY = constrain(yaw, 20, 160);
 
-    static uint32_t lastLog = 0;
+    // Publish one consistent snapshot for the Core 0 SD logger.
+    portENTER_CRITICAL(&flightDataMux);
+    flightData.ax = ax;
+    flightData.ay = ay;
+    flightData.az = az;
 
-    if (millis() - lastLog >= 10)
-    {
-        lastLog = millis();
+    flightData.gx = gx;
+    flightData.gy = gy;
+    flightData.gz = gz;
 
-        if (logFile)
-        {
-            char line[256];
+    flightData.mx = mx;
+    flightData.my = my;
+    flightData.mz = mz;
 
-            snprintf(
-                line,
-                sizeof(line),
-                "%lu,"
-                "%.4f,%.4f,%.4f,"
-                "%.4f,%.4f,%.4f,"
-                "%.4f,%.4f,%.4f,"
-                "%.4f,%.4f,%.4f,"
-                "%.4f,%.4f,%.4f",
+    flightData.pitch = pitch;
+    flightData.roll = roll;
+    flightData.yaw = yaw;
 
-                millis(),
+    flightData.pitchRate = PitchRate;
+    flightData.rollRate = RollRate;
+    flightData.yawRate = YawRate;
 
-                ax, ay, az,
-                gx, gy, gz,
-                mx, my, mz,
-                pitch, roll, yaw,
-                servoAngleP,servoAngleR,servoAngleY
-            );
-
-            logFile.println(line);
-            }
-    }
-
-    static uint32_t lastFlush = 0;
-
-    if (millis() - lastFlush >= 250)
-    {
-        lastFlush = millis();
-
-        if (logFile)
-            logFile.flush();
-    }
+    flightData.servoAngleP = servoAngleP;
+    flightData.servoAngleR = servoAngleR;
+    flightData.servoAngleY = servoAngleY;
+    portEXIT_CRITICAL(&flightDataMux);
 
     Serial.print("Pitch: ");
     Serial.print(pitch);
@@ -584,5 +672,5 @@ void loop()
     Serial.print(RollRate);
     Serial.print(" | Yaw Rate: ");
     Serial.println(YawRate);
-    delay(5);
+    delay(1);
 }
