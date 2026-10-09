@@ -424,6 +424,12 @@ void SDTask(void *parameter)
 
     while (true)
     {
+        FlightData snapshot;
+
+        // Snapshot the flight data quickly; never hold the lock during SD I/O.
+        portENTER_CRITICAL(&flightDataMux);
+        snapshot = flightData;
+        portEXIT_CRITICAL(&flightDataMux);
 
         if (logFile)
         {
@@ -520,8 +526,8 @@ void setup()
     );
 
     // Configure MPU
-    mpu.setGyroRange(MPU6050_RANGE_500_DEG);
-    mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
+    mpu.setGyroRange(MPU6050_RANGE_250_DEG);
+    mpu.setAccelerometerRange(MPU6050_RANGE_4_G);
 
     // Reading data from MPU with drdy
     // internal sample rate = 1 kHz
