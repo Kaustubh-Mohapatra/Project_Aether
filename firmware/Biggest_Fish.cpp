@@ -220,68 +220,75 @@ void MahonyUpdate(
     float dt
     )
 {
-    float normi;
-    float normm;
     float vx, vy, vz;
     float ex, ey, ez;
     float hx, hy;
     float bx, bz;
     float wx, wy, wz;
 
-    // Normalize accelerometer
-    normi = sqrtf(ax * ax + ay * ay + az * az); // for imu
-    normm = sqrtf(mx * mx + my * my + mz * mz); // for mag
-
-    // Prevents division by 0
-    if (normi == 0.0f)
+    // Normalize accelerometer (fast invSqrt with zero protection)
+    float aNormSq = ax * ax + ay * ay + az * az;
+    if (aNormSq <= 0.0f)
     {
         return;
     }
+    float recipNormA = invSqrt(aNormSq);
+    ax *= recipNormA;
+    ay *= recipNormA;
+    az *= recipNormA;
 
-    ax /= normi;
-    ay /= normi;
-    az /= normi;
-
-    if (normm == 0.0f)
+    // Normalize magnetometer (fast invSqrt with zero protection)
+    float mNormSq = mx * mx + my * my + mz * mz;
+    if (mNormSq <= 0.0f)
     {
         return;
     }
+    float recipNormM = invSqrt(mNormSq);
+    mx *= recipNormM;
+    my *= recipNormM;
+    mz *= recipNormM;
 
-    mx /= normm;
-    my /= normm;
-    mz /= normm;
+    // Precalculate repeated quaternion products
+    float q0q0 = q0 * q0;
+    float q0q1 = q0 * q1;
+    float q0q2 = q0 * q2;
+    float q0q3 = q0 * q3;
+    float q1q1 = q1 * q1;
+    float q1q2 = q1 * q2;
+    float q1q3 = q1 * q3;
+    float q2q2 = q2 * q2;
+    float q2q3 = q2 * q3;
+    float q3q3 = q3 * q3;
 
     // Estimated gravity direction from quaternion
-    vx = 2.0f * (q1 * q3 - q0 * q2);
-    vy = 2.0f * (q0 * q1 + q2 * q3);
-    vz = q0 * q0 - q1 * q1 - q2 * q2 + q3 * q3;
+    vx = 2.0f * (q1q3 - q0q2);
+    vy = 2.0f * (q0q1 + q2q3);
+    vz = q0q0 - q1q1 - q2q2 + q3q3;
 
     // Estimated magnetic field direction
-    hx = 2.0f * mx * (0.5f - q2 * q2 - q3 * q3)
-       + 2.0f * my * (q1 * q2 - q0 * q3)
-       + 2.0f * mz * (q1 * q3 + q0 * q2);
+    hx = 2.0f * mx * (0.5f - q2q2 - q3q3)
+       + 2.0f * my * (q1q2 - q0q3)
+       + 2.0f * mz * (q1q3 + q0q2);
 
-    hy = 2.0f * mx * (q1 * q2 + q0 * q3)
-       + 2.0f * my * (0.5f - q1 * q1 - q3 * q3)
-       + 2.0f * mz * (q2 * q3 - q0 * q1);
+    hy = 2.0f * mx * (q1q2 + q0q3)
+       + 2.0f * my * (0.5f - q1q1 - q3q3)
+       + 2.0f * mz * (q2q3 - q0q1);
 
     bx = sqrtf(hx * hx + hy * hy);
 
-    bz = 2.0f * mx * (q1 * q3 - q0 * q2)
-       + 2.0f * my * (q2 * q3 + q0 * q1)
-       + 2.0f * mz * (0.5f - q1 * q1 - q2 * q2);
-
+    bz = 2.0f * mx * (q1q3 - q0q2)
+       + 2.0f * my * (q2q3 + q0q1)
+       + 2.0f * mz * (0.5f - q1q1 - q2q2);
 
     // Estimated magnetic field from quaternion
-    wx = 2.0f * bx * (0.5f - q2 * q2 - q3 * q3)
-       + 2.0f * bz * (q1 * q3 - q0 * q2);
+    wx = 2.0f * bx * (0.5f - q2q2 - q3q3)
+       + 2.0f * bz * (q1q3 - q0q2);
 
-    wy = 2.0f * bx * (q1 * q2 - q0 * q3)
-       + 2.0f * bz * (q0 * q1 + q2 * q3);
+    wy = 2.0f * bx * (q1q2 - q0q3)
+       + 2.0f * bz * (q0q1 + q2q3);
 
-    wz = 2.0f * bx * (q0 * q2 + q1 * q3)
-       + 2.0f * bz * (0.5f - q1 * q1 - q2 * q2);
-
+    wz = 2.0f * bx * (q0q2 + q1q3)
+       + 2.0f * bz * (0.5f - q1q1 - q2q2);
 
     // Net error
     ex = (ay * vz - az * vy)
@@ -300,7 +307,8 @@ void MahonyUpdate(
         integralFBy = 0.0f;
         integralFBz = 0.0f;
     }
-    else{
+    else
+    {
         integralFBx += Ki * ex * dt;
         integralFBy += Ki * ey * dt;
         integralFBz += Ki * ez * dt;
@@ -316,7 +324,8 @@ void MahonyUpdate(
     }
 
     // Proportional feedback
-    if (Kp > 0.0f){
+    if (Kp > 0.0f)
+    {
         gx += Kp * ex;
         gy += Kp * ey;
         gz += Kp * ez;
@@ -337,14 +346,18 @@ void MahonyUpdate(
     q3 += ( qa * gz + qb * gy - qc * gx);
 
     // Normalize quaternion
-    normi = invSqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
-    q0 *= normi;
-    q1 *= normi;
-    q2 *= normi;
-    q3 *= normi;
+    float qNormSq = q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3;
+    if (qNormSq > 0.0f)
+    {
+        float recipQ = invSqrt(qNormSq);
+        q0 *= recipQ;
+        q1 *= recipQ;
+        q2 *= recipQ;
+        q3 *= recipQ;
+    }
 }
 
-// QUATERNION → EULER ANGLES
+// QUATERNION -> EULER ANGLES
 void QuaternionToEuler(
     float &roll,
     float &pitch,
@@ -376,6 +389,10 @@ void QuaternionToEuler(
         1.0f - 2.0f * (q2 * q2 + q3 * q3)
     );
     yaw += declinationAngle;
+
+    // Wrap yaw between -PI and +PI
+    if (yaw > PI) yaw -= 2.0f * PI;
+    else if (yaw < -PI) yaw += 2.0f * PI;
 
     // Convert radians → degrees
     roll  *= RAD_TO_DEG;
@@ -418,6 +435,7 @@ bool ReadMag()
     return true;
 }
 
+// Core 0
 void SDTask(void *parameter)
 {
     uint32_t lastFlush = millis();
@@ -460,7 +478,7 @@ void SDTask(void *parameter)
         }
 
         // Flush periodically without blocking Core 1.
-        if (millis() - lastFlush >= 250)
+        if (millis() - lastFlush >= 1000)
         {
             lastFlush = millis();
 
@@ -485,7 +503,8 @@ void setup()
     rudder.attach(33);
 
 
-    if (!mag.begin()) {
+    if (!mag.begin())
+    {
         Serial.println("Magnetometer initialization failed");
         while (1) {
             delay(10);
@@ -518,7 +537,7 @@ void setup()
     xTaskCreatePinnedToCore(
         SDTask,
         "SD Logger",
-        4096,
+        8192,
         NULL,
         1,
         &sdTaskHandle,
@@ -594,34 +613,25 @@ void setup()
 
 void loop()
 {
+    // Wait for fresh IMU data from interrupt before running loop
+    if (!imuDataReady)  return;
+    imuDataReady = false;
+
     // Calculate delta time
     unsigned long currentTime = micros();
     float dt = (currentTime - lastTime) / 1000000.0f;
-
-    if (dt <= 0.0f || dt > 0.1f)
-    {
-        lastTime = currentTime;     // filter bad dt
-        return;
-    }
-
     lastTime = currentTime;
 
-    bool imuOK = 0;
+    if (dt <= 0.0f || dt > 0.1f)    return;     // filter bad dt
+
+    bool imuOK = ReadMPU();
     bool magOK = ReadMag();
 
     if (!magOK)     Serial.println("MAG READ FAILED");
-
-    // Read data from MPU as soon as its ready
-    if (imuDataReady) {
-        imuDataReady = false;
-        imuOK = ReadMPU();
-    }
+    if (!imuOK)     Serial.println("IMU READ FAILED");
 
     // Run filter
-    if (magOK && imuOK)
-    {
-        MahonyUpdate(gx, gy, gz, ax, ay, az, mx, my, mz, dt);
-    }
+    if (magOK && imuOK) MahonyUpdate(gx, gy, gz, ax, ay, az, mx, my, mz, dt);
 
     // Get Euler angles
     float roll;
@@ -665,18 +675,23 @@ void loop()
     flightData.servoAngleY = servoAngleY;
     portEXIT_CRITICAL(&flightDataMux);
 
-    Serial.print("Pitch: ");
-    Serial.print(pitch);
-    Serial.print(" | Roll: ");
-    Serial.print(roll);
-    Serial.print(" | Yaw: ");
-    Serial.print(yaw);
+    // Throttle Serial print to ~10 Hz so it does not block the 100 Hz flight loop
+    static unsigned long lastPrint = 0;
+    if (millis() - lastPrint >= 100)
+    {
+        lastPrint = millis();
+        Serial.print("Pitch: ");
+        Serial.print(pitch);
+        Serial.print(" | Roll: ");
+        Serial.print(roll);
+        Serial.print(" | Yaw: ");
+        Serial.print(yaw);
 
-    Serial.print(" | Pitch Rate: ");
-    Serial.print(PitchRate);
-    Serial.print(" | Roll Rate: ");
-    Serial.print(RollRate);
-    Serial.print(" | Yaw Rate: ");
-    Serial.println(YawRate);
-    delay(1);
+        Serial.print(" | Pitch Rate: ");
+        Serial.print(PitchRate);
+        Serial.print(" | Roll Rate: ");
+        Serial.print(RollRate);
+        Serial.print(" | Yaw Rate: ");
+        Serial.println(YawRate);
+    }
 }

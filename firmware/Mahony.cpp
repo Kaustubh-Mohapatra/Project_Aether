@@ -35,6 +35,7 @@ unsigned long lastTime = 0;
 float ax, ay, az;
 float gx, gy, gz;
 float mx, my, mz;
+float declinationAngle = -0.61f * DEG_TO_RAD;
 
 // IMU Bias correction
 float gyroBiasX = 0.0f;
@@ -156,68 +157,75 @@ void MahonyUpdate(
     float dt
     )
 {
-    float normi;
-    float normm;
     float vx, vy, vz;
     float ex, ey, ez;
     float hx, hy;
     float bx, bz;
     float wx, wy, wz;
 
-    // Normalize accelerometer
-    normi = sqrtf(ax * ax + ay * ay + az * az); // for imu
-    normm = sqrtf(mx * mx + my * my + mz * mz); // for mag
-
-    // Prevents division by 0
-    if (normi == 0.0f)
+    // Normalize accelerometer (fast invSqrt with zero protection)
+    float aNormSq = ax * ax + ay * ay + az * az;
+    if (aNormSq <= 0.0f)
     {
         return;
     }
+    float recipNormA = invSqrt(aNormSq);
+    ax *= recipNormA;
+    ay *= recipNormA;
+    az *= recipNormA;
 
-    ax /= normi;
-    ay /= normi;
-    az /= normi;
-
-    if (normm == 0.0f)
+    // Normalize magnetometer (fast invSqrt with zero protection)
+    float mNormSq = mx * mx + my * my + mz * mz;
+    if (mNormSq <= 0.0f)
     {
         return;
     }
+    float recipNormM = invSqrt(mNormSq);
+    mx *= recipNormM;
+    my *= recipNormM;
+    mz *= recipNormM;
 
-    mx /= normm;
-    my /= normm;
-    mz /= normm;
+    // Precalculate repeated quaternion products
+    float q0q0 = q0 * q0;
+    float q0q1 = q0 * q1;
+    float q0q2 = q0 * q2;
+    float q0q3 = q0 * q3;
+    float q1q1 = q1 * q1;
+    float q1q2 = q1 * q2;
+    float q1q3 = q1 * q3;
+    float q2q2 = q2 * q2;
+    float q2q3 = q2 * q3;
+    float q3q3 = q3 * q3;
 
     // Estimated gravity direction from quaternion
-    vx = 2.0f * (q1 * q3 - q0 * q2);
-    vy = 2.0f * (q0 * q1 + q2 * q3);
-    vz = q0 * q0 - q1 * q1 - q2 * q2 + q3 * q3;
+    vx = 2.0f * (q1q3 - q0q2);
+    vy = 2.0f * (q0q1 + q2q3);
+    vz = q0q0 - q1q1 - q2q2 + q3q3;
 
     // Estimated magnetic field direction
-    hx = 2.0f * mx * (0.5f - q2 * q2 - q3 * q3)
-       + 2.0f * my * (q1 * q2 - q0 * q3)
-       + 2.0f * mz * (q1 * q3 + q0 * q2);
+    hx = 2.0f * mx * (0.5f - q2q2 - q3q3)
+       + 2.0f * my * (q1q2 - q0q3)
+       + 2.0f * mz * (q1q3 + q0q2);
 
-    hy = 2.0f * mx * (q1 * q2 + q0 * q3)
-       + 2.0f * my * (0.5f - q1 * q1 - q3 * q3)
-       + 2.0f * mz * (q2 * q3 - q0 * q1);
+    hy = 2.0f * mx * (q1q2 + q0q3)
+       + 2.0f * my * (0.5f - q1q1 - q3q3)
+       + 2.0f * mz * (q2q3 - q0q1);
 
     bx = sqrtf(hx * hx + hy * hy);
 
-    bz = 2.0f * mx * (q1 * q3 - q0 * q2)
-       + 2.0f * my * (q2 * q3 + q0 * q1)
-       + 2.0f * mz * (0.5f - q1 * q1 - q2 * q2);
-
+    bz = 2.0f * mx * (q1q3 - q0q2)
+       + 2.0f * my * (q2q3 + q0q1)
+       + 2.0f * mz * (0.5f - q1q1 - q2q2);
 
     // Estimated magnetic field from quaternion
-    wx = 2.0f * bx * (0.5f - q2 * q2 - q3 * q3)
-       + 2.0f * bz * (q1 * q3 - q0 * q2);
+    wx = 2.0f * bx * (0.5f - q2q2 - q3q3)
+       + 2.0f * bz * (q1q3 - q0q2);
 
-    wy = 2.0f * bx * (q1 * q2 - q0 * q3)
-       + 2.0f * bz * (q0 * q1 + q2 * q3);
+    wy = 2.0f * bx * (q1q2 - q0q3)
+       + 2.0f * bz * (q0q1 + q2q3);
 
-    wz = 2.0f * bx * (q0 * q2 + q1 * q3)
-       + 2.0f * bz * (0.5f - q1 * q1 - q2 * q2);
-
+    wz = 2.0f * bx * (q0q2 + q1q3)
+       + 2.0f * bz * (0.5f - q1q1 - q2q2);
 
     // Net error
     ex = (ay * vz - az * vy)
@@ -229,14 +237,15 @@ void MahonyUpdate(
     ez = (ax * vy - ay * vx)
        + (mx * wy - my * wx);
 
-    // Integral feedback [In an if so i can turn it off if Ki = 0]
+    // Integral feedback [In an if so I can turn it off if Ki or Kp = 0]
     if (Ki <= 0.0f)
     {
         integralFBx = 0.0f;
         integralFBy = 0.0f;
         integralFBz = 0.0f;
     }
-    else{
+    else
+    {
         integralFBx += Ki * ex * dt;
         integralFBy += Ki * ey * dt;
         integralFBz += Ki * ez * dt;
@@ -252,7 +261,8 @@ void MahonyUpdate(
     }
 
     // Proportional feedback
-    if (Kp > 0.0f){
+    if (Kp > 0.0f)
+    {
         gx += Kp * ex;
         gy += Kp * ey;
         gz += Kp * ez;
@@ -273,11 +283,15 @@ void MahonyUpdate(
     q3 += ( qa * gz + qb * gy - qc * gx);
 
     // Normalize quaternion
-    normi = invSqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
-    q0 *= normi;
-    q1 *= normi;
-    q2 *= normi;
-    q3 *= normi;
+    float qNormSq = q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3;
+    if (qNormSq > 0.0f)
+    {
+        float recipQ = invSqrt(qNormSq);
+        q0 *= recipQ;
+        q1 *= recipQ;
+        q2 *= recipQ;
+        q3 *= recipQ;
+    }
 }
 
 // QUATERNION → EULER ANGLES
@@ -311,6 +325,11 @@ void QuaternionToEuler(
         2.0f * (q0 * q3 + q1 * q2),
         1.0f - 2.0f * (q2 * q2 + q3 * q3)
     );
+    yaw += declinationAngle;
+
+    // Wrap yaw between -PI and +PI
+    if (yaw > PI) yaw -= 2.0f * PI;
+    else if (yaw < -PI) yaw += 2.0f * PI;
 
     // Convert radians → degrees
     roll  *= RAD_TO_DEG;
@@ -438,18 +457,23 @@ void loop()
 
     QuaternionToEuler(roll, pitch, yaw);
 
-    Serial.print("Pitch: ");
-    Serial.print(pitch);
-    Serial.print(" | Roll: ");
-    Serial.print(roll);
-    Serial.print(" | Yaw: ");
-    Serial.print(yaw);
+    // Throttle Serial print to ~10 Hz
+    static unsigned long lastPrint = 0;
+    if (millis() - lastPrint >= 100)
+    {
+        lastPrint = millis();
+        Serial.print("Pitch: ");
+        Serial.print(pitch);
+        Serial.print(" | Roll: ");
+        Serial.print(roll);
+        Serial.print(" | Yaw: ");
+        Serial.print(yaw);
 
-    Serial.print(" | Pitch Rate: ");
-    Serial.print(PitchRate);
-    Serial.print(" | Roll Rate: ");
-    Serial.print(RollRate);
-    Serial.print(" | Yaw Rate: ");
-    Serial.println(YawRate);
-    delay(5);
+        Serial.print(" | Pitch Rate: ");
+        Serial.print(PitchRate);
+        Serial.print(" | Roll Rate: ");
+        Serial.print(RollRate);
+        Serial.print(" | Yaw Rate: ");
+        Serial.println(YawRate);
+    }
 }
