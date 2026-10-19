@@ -12,7 +12,7 @@
 #define BMP_CS 4
 
 Adafruit_MPU6050 mpu;
-Adafruit_BMP280 bmp;
+Adafruit_BMP280 bmp(BMP_CS);
 QMC5883P mag(1);
 File logFile;
 Servo aileron, elevator, rudder;
@@ -562,7 +562,7 @@ void setup()
     }
     else    Serial.println("SD initialization successful");
 
-    if (!bmp.begin_SPI(BMP_CS, 4000000, &SPI))
+    if (!bmp.begin(0x76))
     {
         Serial.println("BMP initialization failed!");
         while (1) {
@@ -720,7 +720,7 @@ void loop()
 
     // Throttle Serial print to ~10 Hz so it does not block the 100 Hz flight loop
     static unsigned long lastPrint = 0;
-    if (millis() - lastPrint >= 100)
+    if (millis() - lastPrint >= 100 && magOK && imuOK && bmpOK)
     {
         lastPrint = millis();
         Serial.print("Pitch: ");

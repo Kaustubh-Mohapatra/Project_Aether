@@ -4,6 +4,8 @@
 
 QMC5883P mag(1);
 
+float mx,my,mz;
+
 void setup() {
     Serial.begin(115200);
     Wire.begin(21, 22);
