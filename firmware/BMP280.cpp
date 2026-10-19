@@ -1,17 +1,26 @@
 #include <Arduino.h>
-#include <Wire.h>
+#include <SPI.h>
 #include <Adafruit_BMP280.h>
 
-Adafruit_BMP280 bmp;
+#define BMP_SCK  18
+#define BMP_MISO 19
+#define BMP_MOSI 23
+#define BMP_CS   4
 
-void setup(){
+// Hardware SPI on ESP32 default VSPI pins
+Adafruit_BMP280 bmp(BMP_CS);
+// For Software SPI if needed:
+// Adafruit_BMP280 bmp(BMP_CS, BMP_MOSI, BMP_MISO, BMP_SCK);
+
+void setup() {
     Serial.begin(115200);
-    Wire.begin(21, 22);
-    Serial.println("IMU test");
+    Serial.println("BMP280 SPI Test");
 
-    if (!bmp.begin(0x76)) {  // 76 or 77
+    SPI.begin(BMP_SCK, BMP_MISO, BMP_MOSI, BMP_CS);
+
+    if (!bmp.begin()) {
         Serial.println("Barometer initialization check failed");
-        while (1){
+        while (1) {
             delay(10);
         }
     }

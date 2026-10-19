@@ -2,12 +2,17 @@
 #include <Wire.h>
 #include <SPI.h>
 #include <Adafruit_MPU6050.h>
+#include <Adafruit_BMP280.h>
 #include <Adafruit_Sensor.h>
 #include <ESP32Servo.h>
 #include "QMC5883P.h"
 #include <SD.h>
 
+#define SD_CS 5
+#define BMP_CS 4
+
 Adafruit_MPU6050 mpu;
+Adafruit_BMP280 bmp;
 QMC5883P mag(1);
 File logFile;
 Servo aileron, elevator, rudder;
@@ -19,6 +24,7 @@ struct FlightData {
     float mx, my, mz;
     float pitch, roll, yaw;
     float pitchRate, rollRate, yawRate;
+    float altitude, pressure;
     int servoAngleP, servoAngleR, servoAngleY;
 };
 
@@ -61,6 +67,7 @@ float ax, ay, az;
 float gx, gy, gz;
 float mx, my, mz;
 float declinationAngle = -0.61f * DEG_TO_RAD;
+float altitude, pressure;
 
 // IMU Bias correction
 float gyroBiasX = 0.0f;
@@ -91,13 +98,22 @@ void calibrateGyro()
 
     delay(2000);
 
-    for (int i = 0; i < samples; i++)
-    {
-        ReadMPU();
-        sumX += gx;
-        sumY += gy;
-        sumZ += gz;
-        delay(2);
+    imuDataReady = false;
+    int collected = 0;
+
+    while (collected < samples) {
+        if (imuDataReady) {
+            imuDataReady = false;
+
+            if (ReadMPU()) {
+                sumX += gx;
+                sumY += gy;
+                sumZ += gz;
+                collected++;
+            }
+        }
+
+        vTaskDelay(1);
     }
 
     gyroBiasX = sumX / samples;
@@ -435,6 +451,15 @@ bool ReadMag()
     return true;
 }
 
+// Barometer readings
+bool ReadBMP()
+{
+    pressure = bmp.readPressure();          // Pa
+    altitude = bmp.readAltitude(1013.25f);  // metres, approximate
+
+    return isfinite(pressure) && pressure > 0.0f && isfinite(altitude);
+}
+
 // Core 0
 void SDTask(void *parameter)
 {
@@ -461,6 +486,7 @@ void SDTask(void *parameter)
                 "%.4f,%.4f,%.4f,"
                 "%.4f,%.4f,%.4f,"
                 "%.4f,%.4f,%.4f,"
+                "%.4f,%.4f,"
                 "%d,%d,%d",
 
                 millis(),
@@ -469,6 +495,7 @@ void SDTask(void *parameter)
                 snapshot.gx, snapshot.gy, snapshot.gz,
                 snapshot.mx, snapshot.my, snapshot.mz,
                 snapshot.pitch, snapshot.roll, snapshot.yaw,
+                snapshot.altitude,snapshot.pressure,
                 snapshot.servoAngleP,
                 snapshot.servoAngleR,
                 snapshot.servoAngleY
@@ -522,9 +549,11 @@ void setup()
     }
     else    Serial.println("IMU initialization successful");
 
-    SPI.begin(18, 19, 23, 5);
+    SPI.begin(18, 19, 23, SD_CS);
+    pinMode(BMP_CS, OUTPUT);
+    digitalWrite(BMP_CS, HIGH);
 
-    if (!SD.begin(5, SPI, 4000000))
+    if (!SD.begin(SD_CS, SPI, 4000000))
     {
         Serial.println("SD initialization failed!");
         while(1){
@@ -532,6 +561,15 @@ void setup()
         }
     }
     else    Serial.println("SD initialization successful");
+
+    if (!bmp.begin_SPI(BMP_CS, 4000000, &SPI))
+    {
+        Serial.println("BMP initialization failed!");
+        while (1) {
+            delay(10);
+        }
+    }
+    else    Serial.println("BMP initialization successful");
 
     // Shift logging to core 0
     xTaskCreatePinnedToCore(
@@ -626,9 +664,11 @@ void loop()
 
     bool imuOK = ReadMPU();
     bool magOK = ReadMag();
+    bool bmpOK = ReadBMP();
 
     if (!magOK)     Serial.println("MAG READ FAILED");
     if (!imuOK)     Serial.println("IMU READ FAILED");
+    if (!bmpOK)     Serial.println("BMP READ FAILED");
 
     // Run filter
     if (magOK && imuOK) MahonyUpdate(gx, gy, gz, ax, ay, az, mx, my, mz, dt);
@@ -670,6 +710,9 @@ void loop()
     flightData.rollRate = RollRate;
     flightData.yawRate = YawRate;
 
+    flightData.altitude = altitude;
+    flightData.pressure = pressure;
+
     flightData.servoAngleP = servoAngleP;
     flightData.servoAngleR = servoAngleR;
     flightData.servoAngleY = servoAngleY;
@@ -692,6 +735,11 @@ void loop()
         Serial.print(" | Roll Rate: ");
         Serial.print(RollRate);
         Serial.print(" | Yaw Rate: ");
-        Serial.println(YawRate);
+        Serial.print(YawRate);
+
+        Serial.print(" | Altitude: ");
+        Serial.print(altitude);
+        Serial.print(" | Pressure: ");
+        Serial.println(pressure);
     }
 }
