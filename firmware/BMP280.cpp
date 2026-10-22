@@ -2,15 +2,13 @@
 #include <SPI.h>
 #include <Adafruit_BMP280.h>
 
-#define BMP_CS   4
-// Hardware SPI on ESP32 default VSPI pins
-Adafruit_BMP280 bmp(BMP_CS);
+Adafruit_BMP280 bmp(2);
 
 void setup() {
     Serial.begin(115200);
-    Serial.println("BMP280 SPI Test");
+    Serial.println("BMP280 Test");
 
-    SPI.begin(18, 19, 23, BMP_CS);
+    Wire.begin(21, 22);
 
     if (!bmp.begin(0x76))
     {

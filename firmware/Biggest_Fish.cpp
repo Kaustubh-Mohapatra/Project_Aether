@@ -9,7 +9,6 @@
 #include <SD.h>
 
 #define SD_CS 5
-#define BMP_CS 4
 
 Adafruit_MPU6050 mpu;
 Adafruit_BMP280 bmp(BMP_CS);
@@ -18,7 +17,8 @@ File logFile;
 Servo aileron, elevator, rudder;
 
 // Shared snapshot: Core 1 publishes flight data, Core 0 logs it.
-struct FlightData {
+struct FlightData
+{
     float ax, ay, az;
     float gx, gy, gz;
     float mx, my, mz;
@@ -51,8 +51,8 @@ float q3 = 0.0f;
 
 
 // Filter tuning [Haven't tuned it yet, will tune it later]
-float Kp = 3.0f;
-float Ki = 0.05f;
+float fKp = 3.0f;
+float fKi = 0.05f;
 
 // Integral error
 float integralFBx = 0.0f;
@@ -222,7 +222,6 @@ float invSqrt(float x)
 }
 
 // MAHONY UPDATE
-
 void MahonyUpdate(
     float gx,
     float gy,
@@ -316,8 +315,8 @@ void MahonyUpdate(
     ez = (ax * vy - ay * vx)
        + (mx * wy - my * wx);
 
-    // Integral feedback [In an if so I can turn it off if Ki or Kp = 0]
-    if (Ki <= 0.0f)
+    // Integral feedback [In an if so I can turn it off if fKi or fKp = 0]
+    if (fKi <= 0.0f)
     {
         integralFBx = 0.0f;
         integralFBy = 0.0f;
@@ -325,9 +324,9 @@ void MahonyUpdate(
     }
     else
     {
-        integralFBx += Ki * ex * dt;
-        integralFBy += Ki * ey * dt;
-        integralFBz += Ki * ez * dt;
+        integralFBx += fKi * ex * dt;
+        integralFBy += fKi * ey * dt;
+        integralFBz += fKi * ez * dt;
 
         const float iLimit = 0.5f;   // rad/s
         integralFBx = constrain(integralFBx, -iLimit, iLimit);
@@ -340,11 +339,11 @@ void MahonyUpdate(
     }
 
     // Proportional feedback
-    if (Kp > 0.0f)
+    if (fKp > 0.0f)
     {
-        gx += Kp * ex;
-        gy += Kp * ey;
-        gz += Kp * ez;
+        gx += fKp * ex;
+        gy += fKp * ey;
+        gz += fKp * ez;
     }
 
     // Quaternion derivative
@@ -352,14 +351,10 @@ void MahonyUpdate(
     gy *= 0.5f * dt;
     gz *= 0.5f * dt;
 
-    float qa = q0;
-    float qb = q1;
-    float qc = q2;
-
-    q0 += (-qb * gx - qc * gy - q3 * gz);
-    q1 += ( qa * gx + qc * gz - q3 * gy);
-    q2 += ( qa * gy - qb * gz + q3 * gx);
-    q3 += ( qa * gz + qb * gy - qc * gx);
+    q0 += (-q1 * gx - q2 * gy - q3 * gz);
+    q1 += ( q0 * gx + q2 * gz - q3 * gy);
+    q2 += ( q0 * gy - q1 * gz + q3 * gx);
+    q3 += ( q0 * gz + q1 * gy - q2 * gx);
 
     // Normalize quaternion
     float qNormSq = q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3;
@@ -390,14 +385,8 @@ void QuaternionToEuler(
     float sinp = 2.0f * (q0 * q2 - q3 * q1);
 
     // Prevent asin numerical errors
-    if (fabsf(sinp) >= 1.0f)
-    {
-        pitch = copysignf(PI / 2.0f, sinp);
-    }
-    else
-    {
-        pitch = asinf(sinp);
-    }
+    if (fabsf(sinp) >= 1.0f)    pitch = copysignf(PI / 2.0f, sinp);
+    else    pitch = asinf(sinp);
 
     // Yaw
     yaw = atan2f(
@@ -422,10 +411,7 @@ bool ReadMPU()
     sensors_event_t a = {};
     sensors_event_t g = {};
     sensors_event_t temp = {};
-    if (!mpu.getEvent(&a, &g, &temp))
-    {
-        return false;
-    }
+    if (!mpu.getEvent(&a, &g, &temp))   return false;
 
     ax = a.acceleration.x;
     ay = a.acceleration.y;
@@ -504,7 +490,7 @@ void SDTask(void *parameter)
             logFile.println(line);
         }
 
-        // Flush periodically without blocking Core 1.
+        // Flush periodically without blocfKing Core 1.
         if (millis() - lastFlush >= 1000)
         {
             lastFlush = millis();
@@ -528,7 +514,7 @@ void setup()
     aileron.attach(25);
     elevator.attach(32);
     rudder.attach(33);
-
+    SPI.begin(18, 19, 23, SD_CS);
 
     if (!mag.begin())
     {
@@ -548,10 +534,6 @@ void setup()
         }
     }
     else    Serial.println("IMU initialization successful");
-
-    SPI.begin(18, 19, 23, SD_CS);
-    pinMode(BMP_CS, OUTPUT);
-    digitalWrite(BMP_CS, HIGH);
 
     if (!SD.begin(SD_CS, SPI, 4000000))
     {
@@ -624,10 +606,7 @@ void setup()
     logFile = SD.open(path, FILE_WRITE);
     Serial.print("Logging to "); Serial.println(path);
 
-    if (!logFile)
-    {
-        Serial.println("Failed to open flight.csv!");
-    }
+    if (!logFile)   Serial.println("Failed to open flight.csv!");
     else
     {
         logFile.println(
@@ -665,10 +644,6 @@ void loop()
     bool imuOK = ReadMPU();
     bool magOK = ReadMag();
     bool bmpOK = ReadBMP();
-
-    if (!magOK)     Serial.println("MAG READ FAILED");
-    if (!imuOK)     Serial.println("IMU READ FAILED");
-    if (!bmpOK)     Serial.println("BMP READ FAILED");
 
     // Run filter
     if (magOK && imuOK) MahonyUpdate(gx, gy, gz, ax, ay, az, mx, my, mz, dt);
@@ -720,7 +695,7 @@ void loop()
 
     // Throttle Serial print to ~10 Hz so it does not block the 100 Hz flight loop
     static unsigned long lastPrint = 0;
-    if (millis() - lastPrint >= 100 && magOK && imuOK && bmpOK)
+    if (millis() - lastPrint >= 100)
     {
         lastPrint = millis();
         Serial.print("Pitch: ");
@@ -738,8 +713,6 @@ void loop()
         Serial.print(YawRate);
 
         Serial.print(" | Altitude: ");
-        Serial.print(altitude);
-        Serial.print(" | Pressure: ");
-        Serial.println(pressure);
+        Serial.println(altitude);
     }
 }
