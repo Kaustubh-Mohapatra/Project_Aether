@@ -9,6 +9,7 @@
 #include <SD.h>
 
 #define SD_CS 5
+#define BMP_CS 4
 
 Adafruit_MPU6050 mpu;
 Adafruit_BMP280 bmp(BMP_CS);
@@ -515,6 +516,8 @@ void setup()
     elevator.attach(32);
     rudder.attach(33);
     SPI.begin(18, 19, 23, SD_CS);
+    pinMode(BMP_CS, OUTPUT);
+    digitalWrite(BMP_CS, HIGH);
 
     if (!mag.begin())
     {
@@ -694,25 +697,21 @@ void loop()
     portEXIT_CRITICAL(&flightDataMux);
 
     // Throttle Serial print to ~10 Hz so it does not block the 100 Hz flight loop
-    static unsigned long lastPrint = 0;
-    if (millis() - lastPrint >= 100)
-    {
-        lastPrint = millis();
-        Serial.print("Pitch: ");
-        Serial.print(pitch);
-        Serial.print(" | Roll: ");
-        Serial.print(roll);
-        Serial.print(" | Yaw: ");
-        Serial.print(yaw);
+    lastPrint = millis();
+    Serial.print("Pitch: ");
+    Serial.print(pitch);
+    Serial.print(" | Roll: ");
+    Serial.print(roll);
+    Serial.print(" | Yaw: ");
+    Serial.print(yaw);
 
-        Serial.print(" | Pitch Rate: ");
-        Serial.print(PitchRate);
-        Serial.print(" | Roll Rate: ");
-        Serial.print(RollRate);
-        Serial.print(" | Yaw Rate: ");
-        Serial.print(YawRate);
+    Serial.print(" | Pitch Rate: ");
+    Serial.print(PitchRate);
+    Serial.print(" | Roll Rate: ");
+    Serial.print(RollRate);
+    Serial.print(" | Yaw Rate: ");
+    Serial.print(YawRate);
 
-        Serial.print(" | Altitude: ");
-        Serial.println(altitude);
-    }
+    Serial.print(" | Altitude: ");
+    Serial.println(altitude);
 }

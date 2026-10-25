@@ -8,7 +8,8 @@ void setup() {
     Serial.begin(115200);
     Serial.println("BMP280 Test");
 
-    Wire.begin(21, 22);
+    Serial.println("BMP280 SPI Test");
+    SPI.begin(18, 19, 23, BMP_CS);
 
     if (!bmp.begin(0x76))
     {
