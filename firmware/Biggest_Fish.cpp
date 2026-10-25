@@ -697,7 +697,6 @@ void loop()
     portEXIT_CRITICAL(&flightDataMux);
 
     // Throttle Serial print to ~10 Hz so it does not block the 100 Hz flight loop
-    lastPrint = millis();
     Serial.print("Pitch: ");
     Serial.print(pitch);
     Serial.print(" | Roll: ");
